@@ -247,45 +247,57 @@ namespace OriginXR.Core
         private IEnumerator ConnectRoutine()
         {
             Debug.Log($"[NetworkManager] 正在连接: {ServerUrl}");
+            bool hasError = false;
+            string errorMsg = "";
 
             try
             {
                 _webSocket = new ClientWebSocket();
                 _webSocket.Options.AddSubProtocol("json");
 
-                // 添加认证头
                 if (!string.IsNullOrEmpty(_authToken))
                 {
                     _webSocket.Options.SetRequestHeader("Authorization", $"Bearer {_authToken}");
-                }
-
-                // 异步连接
-                Task connectTask = _webSocket.ConnectAsync(new Uri(ServerUrl), _cancellationTokenSource.Token);
-                yield return new WaitUntil(() => connectTask.IsCompleted);
-
-                if (connectTask.IsFaulted)
-                {
-                    HandleConnectionError(connectTask.Exception?.InnerException?.Message ?? "连接失败");
-                    yield break;
-                }
-
-                if (_webSocket.State == WebSocketState.Open)
-                {
-                    IsConnected = true;
-                    _reconnectAttempts = 0;
-                    _lastHeartbeatResponse = DateTime.UtcNow;
-
-                    Debug.Log("[NetworkManager] WebSocket 连接成功");
-                    OnConnected?.Invoke();
-
-                    // 启动接收和心跳协程
-                    StartCoroutine(ReceiveRoutine());
-                    StartCoroutine(HeartbeatRoutine());
                 }
             }
             catch (Exception ex)
             {
                 HandleConnectionError(ex.Message);
+                yield break;
+            }
+
+            // 异步连接
+            Task connectTask = null;
+            try
+            {
+                connectTask = _webSocket.ConnectAsync(new Uri(ServerUrl), _cancellationTokenSource.Token);
+            }
+            catch (Exception ex)
+            {
+                HandleConnectionError(ex.Message);
+                yield break;
+            }
+
+            yield return new WaitUntil(() => connectTask.IsCompleted);
+
+            if (connectTask.IsFaulted)
+            {
+                HandleConnectionError(connectTask.Exception?.InnerException?.Message ?? "连接失败");
+                yield break;
+            }
+
+            if (_webSocket.State == WebSocketState.Open)
+            {
+                IsConnected = true;
+                _reconnectAttempts = 0;
+                _lastHeartbeatResponse = DateTime.UtcNow;
+
+                Debug.Log("[NetworkManager] WebSocket 连接成功");
+                OnConnected?.Invoke();
+
+                // 启动接收和心跳协程
+                StartCoroutine(ReceiveRoutine());
+                StartCoroutine(HeartbeatRoutine());
             }
         }
 
@@ -298,43 +310,14 @@ namespace OriginXR.Core
 
             while (_webSocket != null && _webSocket.State == WebSocketState.Open)
             {
+                Task<WebSocketReceiveResult> receiveTask = null;
+                bool taskStarted = false;
+
                 try
                 {
-                    Task<WebSocketReceiveResult> receiveTask = _webSocket.ReceiveAsync(
+                    receiveTask = _webSocket.ReceiveAsync(
                         new ArraySegment<byte>(buffer), _cancellationTokenSource.Token);
-
-                    yield return new WaitUntil(() => receiveTask.IsCompleted);
-
-                    if (receiveTask.IsFaulted || receiveTask.IsCanceled)
-                        break;
-
-                    WebSocketReceiveResult result = receiveTask.Result;
-
-                    if (result.MessageType == WebSocketMessageType.Close)
-                    {
-                        Debug.Log("[NetworkManager] 服务端关闭连接");
-                        break;
-                    }
-
-                    // 累加数据
-                    messageBuffer.AddRange(new ArraySegment<byte>(buffer, 0, result.Count));
-
-                    if (result.EndOfMessage)
-                    {
-                        byte[] completeMessage = messageBuffer.ToArray();
-                        messageBuffer.Clear();
-
-                        // 根据消息类型分发
-                        if (result.MessageType == WebSocketMessageType.Text)
-                        {
-                            string json = Encoding.UTF8.GetString(completeMessage);
-                            DispatchJsonMessage(json);
-                        }
-                        else if (result.MessageType == WebSocketMessageType.Binary)
-                        {
-                            DispatchProtoMessage(completeMessage);
-                        }
-                    }
+                    taskStarted = true;
                 }
                 catch (OperationCanceledException)
                 {
@@ -344,6 +327,41 @@ namespace OriginXR.Core
                 {
                     Debug.LogWarning($"[NetworkManager] 接收异常: {ex.Message}");
                     break;
+                }
+
+                if (!taskStarted) break;
+
+                yield return new WaitUntil(() => receiveTask.IsCompleted);
+
+                if (receiveTask.IsFaulted || receiveTask.IsCanceled)
+                    break;
+
+                WebSocketReceiveResult result = receiveTask.Result;
+
+                if (result.MessageType == WebSocketMessageType.Close)
+                {
+                    Debug.Log("[NetworkManager] 服务端关闭连接");
+                    break;
+                }
+
+                // 累加数据
+                messageBuffer.AddRange(new ArraySegment<byte>(buffer, 0, result.Count));
+
+                if (result.EndOfMessage)
+                {
+                    byte[] completeMessage = messageBuffer.ToArray();
+                    messageBuffer.Clear();
+
+                    // 根据消息类型分发
+                    if (result.MessageType == WebSocketMessageType.Text)
+                    {
+                        string json = Encoding.UTF8.GetString(completeMessage);
+                        DispatchJsonMessage(json);
+                    }
+                    else if (result.MessageType == WebSocketMessageType.Binary)
+                    {
+                        DispatchProtoMessage(completeMessage);
+                    }
                 }
             }
 

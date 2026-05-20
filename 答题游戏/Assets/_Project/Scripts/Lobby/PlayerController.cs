@@ -25,7 +25,7 @@ namespace OriginXR.Lobby
 
         [Header("输入")]
         [SerializeField] private bool _useMobileInput;               // 是否使用移动端输入
-        [SerializeField] private Joystick _moveJoystick;             // 移动摇杆（移动端）
+        [SerializeField] private MobileJoystick _moveJoystick;        // 移动摇杆（移动端，挂载 MobileJoystick 组件）
 
         [Header("同步")]
         [SerializeField] private float _syncInterval = 0.2f;        // 位置同步间隔（秒）
@@ -144,9 +144,10 @@ namespace OriginXR.Lobby
 
             if (_useMobileInput && _moveJoystick != null)
             {
-                horizontal = _moveJoystick.Horizontal;
-                vertical = _moveJoystick.Vertical;
-                isRunning = _moveJoystick.Direction.magnitude > 0.8f;
+                horizontal = _moveJoystick.GetHorizontal();
+                vertical = _moveJoystick.GetVertical();
+                float magnitude = Mathf.Sqrt(horizontal * horizontal + vertical * vertical);
+                isRunning = magnitude > 0.8f;
             }
             else
             {
@@ -231,6 +232,61 @@ namespace OriginXR.Lobby
             Vector3 rot = transform.eulerAngles;
             string jsonData = $"{{\"position\":{{\"x\":{pos.x:F2},\"y\":{pos.y:F2},\"z\":{pos.z:F2}}},\"rotation\":{{\"y\":{rot.y:F2}}}}}";
             networkManager.Send("lobby:player_move", jsonData);
+        }
+    }
+
+    /// <summary>
+    /// 移动端虚拟摇杆组件
+    /// 挂载到 UI 摇杆 GameObject 上，通过拖拽计算水平/垂直输入值
+    /// </summary>
+    public class MobileJoystick : MonoBehaviour
+    {
+        [Header("摇杆范围")]
+        [SerializeField] private RectTransform _joystickBackground;
+        [SerializeField] private RectTransform _joystickHandle;
+        [SerializeField] private float _maxRadius = 100f;
+
+        private Vector2 _inputVector;
+        private Vector2 _startPosition;
+
+        private void Start()
+        {
+            if (_joystickBackground != null)
+                _startPosition = _joystickBackground.position;
+        }
+
+        /// <summary>获取水平输入值 (-1 ~ 1)</summary>
+        public float GetHorizontal() => _inputVector.x;
+
+        /// <summary>获取垂直输入值 (-1 ~ 1)</summary>
+        public float GetVertical() => _inputVector.y;
+
+        private void Update()
+        {
+            if (Input.touchCount > 0)
+            {
+                Touch touch = Input.GetTouch(0);
+                if (touch.phase == TouchPhase.Began)
+                {
+                    _startPosition = touch.position;
+                    if (_joystickBackground != null)
+                        _joystickBackground.position = _startPosition;
+                }
+                else if (touch.phase == TouchPhase.Moved || touch.phase == TouchPhase.Stationary)
+                {
+                    Vector2 direction = touch.position - _startPosition;
+                    _inputVector = Vector2.ClampMagnitude(direction / _maxRadius, 1f);
+
+                    if (_joystickHandle != null)
+                        _joystickHandle.localPosition = _inputVector * _maxRadius;
+                }
+                else if (touch.phase == TouchPhase.Ended || touch.phase == TouchPhase.Canceled)
+                {
+                    _inputVector = Vector2.zero;
+                    if (_joystickHandle != null)
+                        _joystickHandle.localPosition = Vector3.zero;
+                }
+            }
         }
     }
 }

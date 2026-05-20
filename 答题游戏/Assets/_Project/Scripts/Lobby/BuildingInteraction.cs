@@ -3,6 +3,7 @@ using UnityEngine.UI;
 using TMPro;
 using UnityEngine.Events;
 using System.Collections.Generic;
+using static OriginXR.Lobby.BuildingEntry;
 
 namespace OriginXR.Lobby
 {
