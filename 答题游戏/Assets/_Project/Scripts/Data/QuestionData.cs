@@ -4,77 +4,114 @@ using System.Collections.Generic;
 namespace OriginXR.Data
 {
     /// <summary>
-    /// 题目数据模型
-    /// 负责：
-    /// 1. 定义一道题目的完整数据结构（对应 Protobuf Question 消息）
-    /// 2. 包含题目内容、选项、正确答案（服务端校验后下发结果）、难度、限时等
-    /// 3. 作为对战（PVE/PVP）中题目展示的数据源
-    ///
-    /// 注意：correct_answer 由服务端保管，不在此模型中传输；
-    ///       客户端仅收到服务端下发的题目内容和选项，答后收到对/错判定结果。
-    ///
-    /// Protobuf 对应：message Question in game.proto
+    /// 题目类型枚举（与 Protobuf QuestionType 对齐）
     /// </summary>
-
-    /// <summary>题目类型枚举</summary>
     public enum QuestionType
     {
-        SingleChoice = 0,   // 单选题
-        MultiChoice = 1,    // 多选题
-        TrueFalse = 2,      // 判断题
-        FillBlank = 3,      // 填空题
-        Sorting = 4,        // 排序题
-        Matching = 5        // 连线题
+        SingleChoice = 0,   // 单选题（4选1）
+        MultiChoice = 1,    // 多选题（多选 + 确认）
+        TrueFalse = 2,      // 判断题（对/错）
+        FillBlank = 3,      // 填空题（文本输入）
+        Sorting = 4,        // 排序题（拖拽排序）
+        Matching = 5        // 连线题（拖拽连线）
     }
 
+    /// <summary>
+    /// 题目数据模型
+    /// 负责：
+    /// 1. 定义完整题目数据结构（对应 Protobuf Question 消息）
+    /// 2. 包含题目内容、选项、媒体素材、难度、限时、解析
+    /// 3. 答题结果字段（服务端校验后填充）
+    ///
+    /// 安全注意：
+    ///   correctAnswer 字段仅服务端持有，客户端不存储。
+    ///   答题结果通过 AnswerHandler 从服务端获取后填入 IsCorrect/Explanation。
+    /// </summary>
     [Serializable]
     public class QuestionData
     {
         // === 基础信息 ===
-        /// <summary>题目唯一ID</summary>
-        public string Id;
+        public string id;
+        public QuestionType type;
+        public string content;               // 题目文本（支持简单HTML标签）
+        public string mediaUrl;              // 题目配图/视频/音频 URL
+        public string mediaType;             // "image" / "video" / "audio" / "none"
 
-        /// <summary>题目类型</summary>
-        public QuestionType Type;
-
-        /// <summary>题目内容（支持富文本/HTML）</summary>
-        public string Content;
-
-        /// <summary>题目配图或视频 URL</summary>
-        public string MediaUrl;
-
-        /// <summary>媒体类型：image / video / none</summary>
-        public string MediaType;
-
-        // === 选项 ===
-        /// <summary>选项列表（A/B/C/D...）</summary>
-        public List<OptionData> Options;
+        // === 选项列表 ===
+        public List<OptionData> options;
 
         // === 配置 ===
-        /// <summary>难度（1~5）</summary>
-        public int Difficulty;
+        public int difficulty;               // 1=简单 ~ 5=困难
+        public int timeLimit;                // 答题限时（秒）
+        public List<string> knowledgePointIds; // 关联知识点ID列表
+        public string subjectId;             // 所属学科ID
+        public string explanation;           // 题目解析（答错后展示）
 
-        /// <summary>答题限时（秒）</summary>
-        public int TimeLimit;
+        // === 答题结果（服务端返回后填充） ===
+        [NonSerialized] public string selectedAnswer;
+        [NonSerialized] public bool isCorrect;
+        [NonSerialized] public float usedTime;          // 答题耗时（秒）
+        [NonSerialized] public int scoreGained;          // 本题得分
 
-        /// <summary>所属知识点ID列表</summary>
-        public List<string> KnowledgePointIds;
+        // === 方法 ===
 
-        /// <summary>来源学科</summary>
-        public string SubjectId;
+        /// <summary>获取选项数量</summary>
+        public int GetOptionCount() => options?.Count ?? 0;
 
-        /// <summary>题目解析（答错后展示）</summary>
-        public string Explanation;
+        /// <summary>根据 key 获取选项</summary>
+        public OptionData GetOption(string key)
+        {
+            if (options == null) return null;
+            return options.Find(o => o.key == key);
+        }
 
-        // === 答题结果（答题后填充） ===
-        /// <summary>用户选择的答案</summary>
-        public string SelectedAnswer;
+        /// <summary>获取难度文字描述</summary>
+        public string GetDifficultyText()
+        {
+            return difficulty switch
+            {
+                1 => "★☆☆☆☆",
+                2 => "★★☆☆☆",
+                3 => "★★★☆☆",
+                4 => "★★★★☆",
+                5 => "★★★★★",
+                _ => "未知"
+            };
+        }
 
-        /// <summary>是否正确（由服务端返回）</summary>
-        public bool IsCorrect;
+        /// <summary>获取题型中文名称</summary>
+        public string GetTypeName()
+        {
+            return type switch
+            {
+                QuestionType.SingleChoice => "单选题",
+                QuestionType.MultiChoice => "多选题",
+                QuestionType.TrueFalse => "判断题",
+                QuestionType.FillBlank => "填空题",
+                QuestionType.Sorting => "排序题",
+                QuestionType.Matching => "连线题",
+                _ => "未知题型"
+            };
+        }
 
-        /// <summary>答题耗时（秒）</summary>
-        public float UsedTime;
+        /// <summary>克隆题目数据（不含答题结果）</summary>
+        public QuestionData Clone()
+        {
+            return new QuestionData
+            {
+                id = this.id,
+                type = this.type,
+                content = this.content,
+                mediaUrl = this.mediaUrl,
+                mediaType = this.mediaType,
+                options = this.options?.ConvertAll(o => o.Clone()),
+                difficulty = this.difficulty,
+                timeLimit = this.timeLimit,
+                knowledgePointIds = this.knowledgePointIds != null ? new List<string>(this.knowledgePointIds) : null,
+                subjectId = this.subjectId,
+                explanation = this.explanation
+            };
+        }
     }
 
     /// <summary>
@@ -83,13 +120,19 @@ namespace OriginXR.Data
     [Serializable]
     public class OptionData
     {
-        /// <summary>选项标识（A/B/C/D）</summary>
-        public string Key;
+        public string key;       // 选项标识 A/B/C/D/E/F
+        public string content;   // 选项文本（支持简单HTML）
+        public string mediaUrl;  // 选项配图URL（可选）
 
-        /// <summary>选项内容</summary>
-        public string Content;
-
-        /// <summary>选项配图 URL（如需要）</summary>
-        public string MediaUrl;
+        /// <summary>克隆选项</summary>
+        public OptionData Clone()
+        {
+            return new OptionData
+            {
+                key = this.key,
+                content = this.content,
+                mediaUrl = this.mediaUrl
+            };
+        }
     }
 }

@@ -1,106 +1,290 @@
 using UnityEngine;
-using DG.Tweening;
+using UnityEngine.UI;
+using TMPro;
 using System;
 using System.Collections;
 
 namespace OriginXR.Battle
 {
     /// <summary>
-    /// BOSS 动画控制器
-    /// 负责：
-    /// 1. 管理 PVE 关卡中 BOSS 的 3D 模型显示与动画
-    /// 2. 根据答题结果播放对应动画（攻击/受击/技能/出场/死亡）
-    /// 3. 管理 BOSS 血条 UI 的更新与动画
-    /// 4. BOSS 阶段切换（血量低于50%时进入第二阶段）
-    ///
-    /// BOSS 状态机：
-    ///   Idle       -> 待机呼吸动画
-    ///   Attacking  -> 释放攻击动画（玩家答错触发）
-    ///   Hurt       -> 受击动画（玩家答对触发）
-    ///   Skill      -> 释放技能动画（BOSS阶段切换）
-    ///   Defeated   -> 死亡动画（HP归零）
-    ///
-    /// BOSS 配置来源：StageData.BossModelId / BossHP / BossAttack
+    /// BOSS 状态
     /// </summary>
-    public enum BossState { Idle, Attacking, Hurt, Skill, Defeated }
+    public enum BossState { Idle, Attacking, Hurt, Skill, Defeated, Intro }
 
+    /// <summary>
+    /// BOSS 动画与展示控制器
+    /// 负责：
+    /// 1. PVE 战斗中 BOSS 3D 模型展示与状态动画
+    /// 2. BOSS 血条 UI 更新与平滑扣血动画
+    /// 3. 答题结果触发 BOSS 受击/攻击动画
+    /// 4. BOSS 阶段切换（HP < 50% 进入狂暴第二阶段）
+    /// 5. BOSS 击败特效与动画序列
+    /// </summary>
     public class BossController : MonoBehaviour
     {
-        // === 组件引用 ===
+        [Header("3D 模型")]
+        [SerializeField] private Transform _bossModelRoot;
         [SerializeField] private Animator _bossAnimator;
-        [SerializeField] private Transform _bossModelRoot;          // BOSS模型根节点
-        [SerializeField] private ParticleSystem _attackVFX;        // 攻击特效
-        [SerializeField] private ParticleSystem _hitVFX;           // 受击特效
-        [SerializeField] private ParticleSystem _skillVFX;         // 技能特效
-        [SerializeField] private ParticleSystem _defeatedVFX;      // 击败特效
+        [SerializeField] private float _modelRotationSpeed = 20f;   // 待机时缓慢旋转
 
-        // === UI ===
-        [SerializeField] private UnityEngine.UI.Slider _hpSlider;  // BOSS血条
-        [SerializeField] private UnityEngine.UI.Image _hpFillImage;
-        [SerializeField] private TMPro.TextMeshProUGUI _bossNameText;
-        [SerializeField] private TMPro.TextMeshProUGUI _bossHpText;
+        [Header("特效")]
+        [SerializeField] private ParticleSystem _attackVFX;
+        [SerializeField] private ParticleSystem _hitVFX;
+        [SerializeField] private ParticleSystem _skillVFX;
+        [SerializeField] private ParticleSystem _defeatedVFX;
+        [SerializeField] private ParticleSystem _introVFX;
+        [SerializeField] private ParticleSystem _phaseTwoVFX;       // 第二阶段激活特效
 
-        // === 属性 ===
-        public BossState CurrentState { get; private set; }
-        public float CurrentHP { get; private set; }
-        public float MaxHP { get; private set; }
-        public int DamagePerCorrect { get; set; } = 100;           // 每次答对的伤害值
+        [Header("UI 血条")]
+        [SerializeField] private Slider _hpSlider;
+        [SerializeField] private Image _hpFillImage;
+        [SerializeField] private TextMeshProUGUI _bossNameText;
+        [SerializeField] private TextMeshProUGUI _bossHpText;        // "750/1000"
+        [SerializeField] private float _hpBarAnimSpeed = 2f;        // 血条平滑速度
 
-        // === 阶段配置 ===
-        [SerializeField] private float _phaseTwoThreshold = 0.5f;  // 第二阶段血量阈值
-        private bool _isPhaseTwo;
+        [Header("关卡数据")]
+        [SerializeField] private int _damagePerCorrect = 100;       // 答对一次伤害值
+        [SerializeField] private int _damagePerAttack = 25;         // 答错一次扣血量
 
-        // === Animator 参数名 ===
-        private static readonly int IsIdle = Animator.StringToHash("IsIdle");
+        [Header("阶段切换")]
+        [SerializeField] private float _phaseTwoThreshold = 0.5f;   // HP 低于 50% 进入第二阶段
+        [SerializeField] private float _phaseTwoDamageMultiplier = 1.5f;  // 第二阶段伤害倍率
+
+        // === Animator 参数哈希 ===
+        private static readonly int ParamState = Animator.StringToHash("State");
+        private static readonly int TriggerHit = Animator.StringToHash("Hit");
         private static readonly int TriggerAttack = Animator.StringToHash("Attack");
-        private static readonly int TriggerHurt = Animator.StringToHash("Hurt");
         private static readonly int TriggerSkill = Animator.StringToHash("Skill");
         private static readonly int TriggerDefeated = Animator.StringToHash("Defeated");
+        private static readonly int TriggerIntro = Animator.StringToHash("Intro");
+
+        // === 属性 ===
+        public BossState CurrentState { get; private set; } = BossState.Idle;
+        public float CurrentHP { get; private set; }
+        public float MaxHP { get; private set; }
+        public string BossName { get; private set; }
+        public bool IsPhaseTwo { get; private set; }
+
+        // === 内部状态 ===
+        private float _displayHP;            // 用于平滑显示
+        private float _idleRotationTimer;
+
+        // === 事件 ===
+        public event Action OnBossDefeated;
+        public event Action OnBossPhaseChange;
 
         // === Unity 生命周期 ===
-        private void Start() { }
+
+        private void Start()
+        {
+            if (_hpSlider != null)
+            {
+                _hpSlider.minValue = 0f;
+                _hpSlider.maxValue = 1f;
+            }
+        }
+
+        private void Update()
+        {
+            // 待机时缓慢旋转模型
+            if (CurrentState == BossState.Idle && _bossModelRoot != null)
+            {
+                _bossModelRoot.Rotate(Vector3.up, _modelRotationSpeed * Time.deltaTime);
+            }
+
+            // 平滑血条显示
+            if (_hpSlider != null && Mathf.Abs(_displayHP - Mathf.Clamp01(CurrentHP / MaxHP)) > 0.001f)
+            {
+                _displayHP = Mathf.Lerp(_displayHP, Mathf.Clamp01(CurrentHP / MaxHP), Time.deltaTime * _hpBarAnimSpeed);
+                _hpSlider.value = _displayHP;
+                UpdateHPText();
+            }
+        }
 
         // === 公共方法 ===
 
-        /// <summary>初始化BOSS（加载模型 + 设置HP + 播放出场动画）</summary>
-        /// <param name="modelId">BOSS 模型资源ID</param>
-        /// <param name="bossName">BOSS 名称</param>
-        /// <param name="maxHP">最大生命值</param>
-        public void Initialize(string modelId, string bossName, float maxHP) { }
+        /// <summary>初始化 BOSS</summary>
+        public void Initialize(string modelId, string bossName, float maxHP)
+        {
+            BossName = bossName;
+            MaxHP = maxHP > 0 ? maxHP : 1000f;
+            CurrentHP = MaxHP;
+            _displayHP = 1f;
+            IsPhaseTwo = false;
 
-        /// <summary>播放 BOSS 攻击动画（玩家答错触发）</summary>
-        public void PlayAttack() { }
+            if (_bossNameText != null)
+                _bossNameText.text = bossName;
 
-        /// <summary>播放 BOSS 受击动画（玩家答对触发）</summary>
-        /// <param name="damage">造成伤害值</param>
+            if (_hpSlider != null)
+            {
+                _hpSlider.value = 1f;
+                _hpSlider.maxValue = 1f;
+            }
+
+            UpdateHPText();
+
+            // 播放出场动画
+            ChangeState(BossState.Intro);
+            StartCoroutine(PlayIntroSequence());
+        }
+
+        /// <summary>BOSS 攻击玩家（玩家答错）</summary>
+        public void PlayAttack()
+        {
+            ChangeState(BossState.Attacking);
+
+            if (_bossAnimator != null)
+                _bossAnimator.SetTrigger(TriggerAttack);
+
+            if (_attackVFX != null)
+                _attackVFX.Play();
+
+            // 短暂延迟后回到待机
+            StartCoroutine(ReturnToIdleAfter(1.2f));
+
+            Core.AudioManager.Instance?.PlaySFX("boss_attack");
+        }
+
+        /// <summary>BOSS 受击（玩家答对）</summary>
+        /// <param name="damage">伤害值</param>
         /// <param name="isCombo">是否连击伤害</param>
-        public void PlayHurt(int damage, bool isCombo = false) { }
+        public void TakeDamage(int damage, bool isCombo = false)
+        {
+            if (CurrentHP <= 0f) return;
 
-        /// <summary>更新 BOSS 血条 UI</summary>
-        public void UpdateHealthBar() { }
+            float actualDamage = damage;
+            if (isCombo) actualDamage *= 1.5f;
+            if (IsPhaseTwo) actualDamage *= _phaseTwoDamageMultiplier;
+
+            CurrentHP = Mathf.Max(0f, CurrentHP - actualDamage);
+
+            // 受击动画
+            ChangeState(BossState.Hurt);
+
+            if (_bossAnimator != null)
+                _bossAnimator.SetTrigger(TriggerHit);
+
+            if (_hitVFX != null)
+                _hitVFX.Play();
+
+            // 血量低亮闪烁
+            FlashHPBar();
+
+            StartCoroutine(ReturnToIdleAfter(0.8f));
+
+            Core.AudioManager.Instance?.PlaySFX("boss_hit");
+
+            // 检查阶段切换
+            if (!IsPhaseTwo && CurrentHP / MaxHP <= _phaseTwoThreshold)
+            {
+                EnterPhaseTwo();
+            }
+
+            // 检查是否击败
+            if (CurrentHP <= 0f)
+            {
+                StartCoroutine(PlayDefeatedSequence());
+            }
+        }
 
         /// <summary>获取 BOSS 剩余血量百分比</summary>
-        public float GetHPPercent() { return CurrentHP / MaxHP; }
+        public float GetHPPercent() => MaxHP > 0f ? CurrentHP / MaxHP : 0f;
 
-        /// <summary>是否已击败 BOSS</summary>
-        public bool IsDefeated() { return CurrentHP <= 0; }
+        /// <summary>是否已击败</summary>
+        public bool IsDefeated() => CurrentHP <= 0f;
 
-        /// <summary>设置 BOSS 模型可见性</summary>
-        public void SetVisible(bool visible) { }
+        /// <summary>设置可见性</summary>
+        public void SetVisible(bool visible)
+        {
+            if (_bossModelRoot != null)
+                _bossModelRoot.gameObject.SetActive(visible);
+        }
 
         // === 私有方法 ===
-        private void LoadBossModel(string modelId) { }
-        private IEnumerator PlayIntroAnimation() { yield return null; }
-        private void ChangeState(BossState newState) { }
-        private void CheckPhaseTransition() { }     // 检查是否进入第二阶段
-        private void EnterPhaseTwo() { }
-        private void PlayDefeatedSequence() { }
 
-        // === 事件 ===
-        /// <summary>BOSS 被击败事件</summary>
-        public event Action OnBossDefeated;
+        private void ChangeState(BossState newState)
+        {
+            CurrentState = newState;
+        }
 
-        /// <summary>BOSS 进入第二阶段事件</summary>
-        public event Action OnBossPhaseChange;
+        private IEnumerator PlayIntroSequence()
+        {
+            if (_bossAnimator != null)
+                _bossAnimator.SetTrigger(TriggerIntro);
+
+            if (_introVFX != null)
+                _introVFX.Play();
+
+            yield return new WaitForSeconds(2f);
+            ChangeState(BossState.Idle);
+        }
+
+        private IEnumerator PlayDefeatedSequence()
+        {
+            ChangeState(BossState.Defeated);
+
+            if (_bossAnimator != null)
+                _bossAnimator.SetTrigger(TriggerDefeated);
+
+            if (_defeatedVFX != null)
+                _defeatedVFX.Play();
+
+            Core.AudioManager.Instance?.PlaySFX("boss_defeated");
+
+            yield return new WaitForSeconds(2f);
+
+            OnBossDefeated?.Invoke();
+        }
+
+        private void EnterPhaseTwo()
+        {
+            IsPhaseTwo = true;
+            Debug.Log($"[BossController] BOSS 进入第二阶段！伤害 ×{_phaseTwoDamageMultiplier}");
+
+            if (_bossAnimator != null)
+                _bossAnimator.SetTrigger(TriggerSkill);
+
+            if (_phaseTwoVFX != null)
+                _phaseTwoVFX.Play();
+
+            if (_skillVFX != null)
+                _skillVFX.Play();
+
+            ChangeState(BossState.Skill);
+            StartCoroutine(ReturnToIdleAfter(2f));
+
+            OnBossPhaseChange?.Invoke();
+            Core.AudioManager.Instance?.PlaySFX("boss_phase2");
+        }
+
+        private IEnumerator ReturnToIdleAfter(float delay)
+        {
+            yield return new WaitForSeconds(delay);
+            if (CurrentState != BossState.Defeated && CurrentState != BossState.Intro)
+                ChangeState(BossState.Idle);
+        }
+
+        private void FlashHPBar()
+        {
+            if (_hpFillImage == null) return;
+            StartCoroutine(FlashHPRoutine());
+        }
+
+        private IEnumerator FlashHPRoutine()
+        {
+            Color originalColor = _hpFillImage.color;
+            _hpFillImage.color = Color.white;
+            yield return new WaitForSeconds(0.1f);
+            _hpFillImage.color = originalColor;
+        }
+
+        private void UpdateHPText()
+        {
+            if (_bossHpText != null)
+            {
+                float displayCurrent = Mathf.RoundToInt(_displayHP * MaxHP);
+                _bossHpText.text = $"{displayCurrent} / {MaxHP}";
+            }
+        }
     }
 }

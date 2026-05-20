@@ -1,7 +1,5 @@
 using UnityEngine;
 using TMPro;
-using DG.Tweening;
-using System;
 using System.Collections;
 
 namespace OriginXR.Battle
@@ -9,65 +7,134 @@ namespace OriginXR.Battle
     /// <summary>
     /// 连击特效控制器
     /// 负责：
-    /// 1. 管理连击计数器的显示与动画
-    /// 2. 连续答对3题触发"连击"效果（双倍伤害 + 特效爆发）
-    /// 3. 答错时清零连击 + 播放连击断裂动画
-    /// 4. 不同连击段位的视觉差异化（3连击 / 5连击 / 10连击）
-    ///
-    /// 连击段位：
-    ///   3 combo  -> "连击！"  蓝色特效 + 1.5x 得分
-    ///   5 combo  -> "超连击！" 紫色特效 + 2x 得分
-    ///   10 combo -> "完美连击！" 金色特效 + 3x 得分
-    ///
-    /// 依赖：
-    ///   DOTween（动画序列），Particle System（粒子特效），TextMeshPro（文本）
+    /// 1. 管理连击计数器 UI 显示（数字 + 文字标签）
+    /// 2. 连击触发/断裂动画（弹性缩放 + 震动 + 粒子特效）
+    /// 3. 连击得分倍率计算（3连=1.5x, 5连=2x, 10连=3x）
+    /// 4. 连击段位颜色差异化
     /// </summary>
     public class ComboEffectController : MonoBehaviour
     {
-        // === UI 组件 ===
-        [SerializeField] private TextMeshProUGUI _comboCountText;     // 连击数字
-        [SerializeField] private TextMeshProUGUI _comboLabelText;      // "连击！"标签
-        [SerializeField] private RectTransform _comboContainer;        // 连击UI容器
-        [SerializeField] private CanvasGroup _canvasGroup;             // 透明度控制
+        [Header("UI")]
+        [SerializeField] private RectTransform _comboContainer;
+        [SerializeField] private TextMeshProUGUI _comboCountText;
+        [SerializeField] private TextMeshProUGUI _comboLabelText;
+        [SerializeField] private CanvasGroup _canvasGroup;
 
-        // === 特效组件 ===
-        [SerializeField] private ParticleSystem _comboActivateEffect;  // 连击激活粒子
-        [SerializeField] private ParticleSystem _comboBreakEffect;     // 连击断裂粒子
-        [SerializeField] private ParticleSystem _comboUpgradeEffect;   // 连击升级粒子
+        [Header("特效")]
+        [SerializeField] private ParticleSystem _comboActivateEffect;
+        [SerializeField] private ParticleSystem _comboBreakEffect;
+        [SerializeField] private ParticleSystem _comboUpgradeEffect;
 
-        // === 连击参数 ===
-        [SerializeField] private int _minComboForBonus = 3;           // 最低触发连击的答题数
-        [SerializeField] private int _superComboThreshold = 5;        // 超连击阈值
-        [SerializeField] private int _perfectComboThreshold = 10;     // 完美连击阈值
-        [SerializeField] private float _comboTimeout = 5f;            // 连击超时（秒，未答题自动断连）
+        [Header("连击阈值")]
+        [SerializeField] private int _minComboForBonus = 3;
+        [SerializeField] private int _superComboThreshold = 5;
+        [SerializeField] private int _perfectComboThreshold = 10;
 
-        // === 颜色配置 ===
-        [SerializeField] private Color _normalComboColor = new Color(0.2f, 0.6f, 1f);     // 蓝色
-        [SerializeField] private Color _superComboColor = new Color(0.6f, 0.2f, 1f);       // 紫色
-        [SerializeField] private Color _perfectComboColor = new Color(1f, 0.8f, 0.2f);     // 金色
+        [Header("颜色")]
+        [SerializeField] private Color _normalComboColor = new Color(0.2f, 0.6f, 1f);      // 蓝色
+        [SerializeField] private Color _superComboColor = new Color(0.7f, 0.3f, 1f);       // 紫色
+        [SerializeField] private Color _perfectComboColor = new Color(1f, 0.8f, 0.1f);     // 金色
+
+        [Header("动画参数")]
+        [SerializeField] private float _scalePunchAmount = 0.3f;
+        [SerializeField] private float _scalePunchDuration = 0.3f;
+        [SerializeField] private float _shakeAmount = 10f;
+        [SerializeField] private float _shakeDuration = 0.3f;
+        [SerializeField] private float _breakDuration = 0.5f;
 
         // === 状态 ===
         private int _currentCombo;
+        private Coroutine _breakCoroutine;
+        private Vector3 _originalScale;
+        private Vector3 _originalPosition;
 
         // === Unity 生命周期 ===
-        private void Start() { }
+
+        private void Awake()
+        {
+            if (_comboContainer != null)
+            {
+                _originalScale = _comboContainer.localScale;
+                _originalPosition = _comboContainer.localPosition;
+                _comboContainer.gameObject.SetActive(false);
+            }
+        }
 
         // === 公共方法 ===
 
         /// <summary>增加连击数（答对时调用）</summary>
-        public void IncrementCombo() { }
+        public void IncrementCombo()
+        {
+            _currentCombo++;
 
-        /// <summary>重置连击（答错/超时时调用）</summary>
-        public void ResetCombo() { }
+            if (_comboContainer != null)
+                _comboContainer.gameObject.SetActive(true);
+
+            if (_comboCountText != null)
+                _comboCountText.text = _currentCombo.ToString();
+
+            // 连击标签文字
+            if (_comboLabelText != null)
+            {
+                _comboLabelText.text = GetComboTierText();
+                _comboLabelText.color = GetComboTierColor();
+            }
+
+            // 更新颜色
+            if (_comboCountText != null)
+                _comboCountText.color = GetComboTierColor();
+
+            // 连击激活特效
+            if (_currentCombo == _minComboForBonus)
+            {
+                PlayComboActivateEffect();
+            }
+            // 连击升级特效
+            else if (_currentCombo == _superComboThreshold || _currentCombo == _perfectComboThreshold)
+            {
+                PlayComboUpgradeEffect();
+            }
+            // 普通增加动画
+            else if (_currentCombo > _minComboForBonus)
+            {
+                PlayScalePunch(_scalePunchAmount * 0.5f);
+            }
+        }
+
+        /// <summary>重置连击（答错/超时）</summary>
+        public void ResetCombo()
+        {
+            if (_currentCombo >= _minComboForBonus)
+            {
+                PlayComboBreakEffect();
+            }
+
+            _currentCombo = 0;
+
+            if (_comboContainer != null)
+            {
+                if (_breakCoroutine != null)
+                    StopCoroutine(_breakCoroutine);
+                _breakCoroutine = StartCoroutine(HideComboAfterDelay(_breakDuration));
+            }
+        }
 
         /// <summary>获取当前连击得分倍率</summary>
-        /// <returns>1.0 / 1.5 / 2.0 / 3.0</returns>
-        public float GetComboMultiplier() { return 1f; }
+        public float GetComboMultiplier()
+        {
+            if (_currentCombo >= _perfectComboThreshold) return 3f;
+            if (_currentCombo >= _superComboThreshold) return 2f;
+            if (_currentCombo >= _minComboForBonus) return 1.5f;
+            return 1f;
+        }
 
-        /// <summary>是否处于连击状态</summary>
-        public bool IsComboActive() { return _currentCombo >= _minComboForBonus; }
+        /// <summary>是否连击激活中</summary>
+        public bool IsComboActive() => _currentCombo >= _minComboForBonus;
 
-        /// <summary>获取当前连击段位文字</summary>
+        /// <summary>获取当前连击数</summary>
+        public int GetComboCount() => _currentCombo;
+
+        /// <summary>获取连击段位文字</summary>
         public string GetComboTierText()
         {
             if (_currentCombo >= _perfectComboThreshold) return "完美连击！";
@@ -77,12 +144,100 @@ namespace OriginXR.Battle
         }
 
         // === 私有方法 ===
-        private void UpdateComboUI() { }
-        private void PlayComboActivateAnimation() { }
-        private void PlayComboBreakAnimation() { }
-        private void PlayComboUpgradeAnimation() { }
-        private void UpdateComboTextColor() { }
-        private IEnumerator ShakeComboText() { yield return null; }         // 数字震动动画
-        private IEnumerator ScalePunchAnimation(float scale) { yield return null; }  // 弹性缩放动画
+
+        private Color GetComboTierColor()
+        {
+            if (_currentCombo >= _perfectComboThreshold) return _perfectComboColor;
+            if (_currentCombo >= _superComboThreshold) return _superComboColor;
+            return _normalComboColor;
+        }
+
+        private void PlayComboActivateEffect()
+        {
+            if (_comboActivateEffect != null)
+                _comboActivateEffect.Play();
+
+            PlayScalePunch(_scalePunchAmount);
+            PlayShake(_shakeAmount, _shakeDuration);
+
+            Core.AudioManager.Instance?.PlayUISFX("combo_activate");
+        }
+
+        private void PlayComboBreakEffect()
+        {
+            if (_comboBreakEffect != null)
+                _comboBreakEffect.Play();
+
+            Core.AudioManager.Instance?.PlayUISFX("combo_break");
+        }
+
+        private void PlayComboUpgradeEffect()
+        {
+            if (_comboUpgradeEffect != null)
+                _comboUpgradeEffect.Play();
+
+            PlayScalePunch(_scalePunchAmount * 1.5f);
+
+            Core.AudioManager.Instance?.PlayUISFX("combo_upgrade");
+        }
+
+        private void PlayScalePunch(float amount)
+        {
+            if (_comboContainer == null) return;
+            StartCoroutine(ScalePunchRoutine(amount));
+        }
+
+        private IEnumerator ScalePunchRoutine(float amount)
+        {
+            float elapsed = 0f;
+            float duration = _scalePunchDuration;
+            Vector3 start = _originalScale;
+            Vector3 peak = start * (1f + amount);
+
+            while (elapsed < duration)
+            {
+                elapsed += Time.deltaTime;
+                float t = elapsed / duration;
+                float ease = 1f - Mathf.Pow(1f - t, 3f); // easeOutCubic
+                float scale = 1f + Mathf.Sin(t * Mathf.PI * 2f) * amount * (1f - t);
+                _comboContainer.localScale = new Vector3(scale, scale, 1f);
+                yield return null;
+            }
+
+            _comboContainer.localScale = _originalScale;
+        }
+
+        private void PlayShake(float amount, float duration)
+        {
+            if (_comboContainer == null) return;
+            StartCoroutine(ShakeRoutine(amount, duration));
+        }
+
+        private IEnumerator ShakeRoutine(float amount, float duration)
+        {
+            float elapsed = 0f;
+            Vector3 originalPos = _comboContainer.localPosition;
+
+            while (elapsed < duration)
+            {
+                elapsed += Time.deltaTime;
+                float decay = 1f - (elapsed / duration);
+                float x = Random.Range(-1f, 1f) * amount * decay;
+                float y = Random.Range(-1f, 1f) * amount * decay;
+                _comboContainer.localPosition = originalPos + new Vector3(x, y, 0f);
+                yield return null;
+            }
+
+            _comboContainer.localPosition = originalPos;
+        }
+
+        private IEnumerator HideComboAfterDelay(float delay)
+        {
+            yield return new WaitForSeconds(delay);
+            if (_comboContainer != null && _currentCombo == 0)
+            {
+                _comboContainer.gameObject.SetActive(false);
+            }
+        }
     }
 }

@@ -9,120 +9,170 @@ namespace OriginXR.UI
     /// <summary>
     /// 商城面板
     /// 负责：
-    /// 1. 展示可购买的道具/皮肤/体力等商品列表
-    /// 2. 商品分类Tab（道具 / 皮肤 / 体力 / 礼包）
-    /// 3. 商品卡片展示（图标 / 名称 / 价格 / 限购信息）
-    /// 4. 购买流程：点击购买 -> 确认弹窗 -> 扣除货币 -> 发放道具
-    /// 5. 货币余额显示（金币 / 钻石）
-    ///
-    /// 注意：
-    ///   Web 端可浏览商城，实际购买需在 Unity 客户端完成
-    ///
-    /// API 接口：
-    ///   GET  /api/v1/shop/items          -> 获取商品列表
-    ///   POST /api/v1/shop/purchase       -> 购买商品
+    /// 1. 展示可购买道具/皮肤/体力/礼包商品列表
+    /// 2. 分类Tab切换 + 商品网格展示
+    /// 3. 购买流程：点击 → 确认弹窗 → 扣除货币 → 发放道具
     /// </summary>
     public class ShopPanel : MonoBehaviour
     {
-        // === UI 组件 ===
-        [SerializeField] private Canvas _panelCanvas;
+        [Header("主面板")]
         [SerializeField] private GameObject _panelRoot;
         [SerializeField] private Button _closeButton;
 
-        // === 货币显示 ===
-        [SerializeField] private TextMeshProUGUI _goldText;        // 金币余额
-        [SerializeField] private TextMeshProUGUI _diamondText;     // 钻石余额
+        [Header("货币")]
+        [SerializeField] private TextMeshProUGUI _goldText;
+        [SerializeField] private TextMeshProUGUI _diamondText;
 
-        // === 分类Tab ===
-        [SerializeField] private Button _itemTab;                  // 道具
-        [SerializeField] private Button _skinTab;                  // 皮肤
-        [SerializeField] private Button _energyTab;                // 体力
-        [SerializeField] private Button _packTab;                  // 礼包
+        [Header("分类Tab")]
+        [SerializeField] private Button _itemTab;
+        [SerializeField] private Button _skinTab;
+        [SerializeField] private Button _energyTab;
+        [SerializeField] private Button _packTab;
 
-        // === 商品列表 ===
+        [Header("商品网格")]
         [SerializeField] private ScrollRect _scrollRect;
-        [SerializeField] private GridLayoutGroup _itemGrid;        // 商品网格布局
-        [SerializeField] private GameObject _shopItemPrefab;       // 商品卡片预制体
-        [SerializeField] private RectTransform _itemContentRoot;
-
-        // === 商品详情弹窗 ===
-        [SerializeField] private GameObject _itemDetailPanel;
-        [SerializeField] private Image _detailIcon;
-        [SerializeField] private TextMeshProUGUI _detailName;
-        [SerializeField] private TextMeshProUGUI _detailDescription;
-        [SerializeField] private TextMeshProUGUI _detailPrice;
-        [SerializeField] private Button _detailBuyButton;
-        [SerializeField] private Button _detailCloseButton;
+        [SerializeField] private GridLayoutGroup _itemGrid;
+        [SerializeField] private GameObject _shopItemPrefab;
 
         // === 状态 ===
         private ShopCategory _currentCategory = ShopCategory.Item;
-        private List<ShopItemData> _currentItemList;
-        private ShopItemData _selectedItem;
+        private List<ShopItemData> _items = new List<ShopItemData>();
 
         [Serializable]
         public class ShopItemData
         {
-            public string Id;
-            public string Name;
-            public string Description;
-            public string IconId;
-            public ShopCategory Category;
-            public string CurrencyType;         // "gold" / "diamond"
-            public int Price;
-            public int DailyLimit;
-            public int RemainingQuantity;
-            public ShopItemEffect Effect;       // 购买后的效果
-        }
-
-        [Serializable]
-        public class ShopItemEffect
-        {
-            public string EffectType;           // "add_energy" / "add_gold" / "unlock_skin" / "add_item"
-            public string TargetId;             // 目标道具/皮肤ID
-            public int Amount;                  // 数量
+            public string id;
+            public string name;
+            public string description;
+            public string iconId;
+            public ShopCategory category;
+            public string currencyType;    // "gold" / "diamond"
+            public int price;
+            public int dailyLimit;
+            public int remainingQuantity;
         }
 
         public enum ShopCategory { Item, Skin, Energy, Pack }
 
         // === Unity 生命周期 ===
-        private void OnEnable() { }
-        private void OnDisable() { }
+
+        private void Awake()
+        {
+            if (_closeButton != null) _closeButton.onClick.AddListener(Hide);
+            if (_itemTab != null) _itemTab.onClick.AddListener(() => SwitchCategory(ShopCategory.Item));
+            if (_skinTab != null) _skinTab.onClick.AddListener(() => SwitchCategory(ShopCategory.Skin));
+            if (_energyTab != null) _energyTab.onClick.AddListener(() => SwitchCategory(ShopCategory.Energy));
+            if (_packTab != null) _packTab.onClick.AddListener(() => SwitchCategory(ShopCategory.Pack));
+        }
+
+        private void Start()
+        {
+            if (_panelRoot != null) _panelRoot.SetActive(false);
+        }
 
         // === 公共方法 ===
 
-        public void Show() { }
-        public void Hide() { }
+        public void Show()
+        {
+            if (_panelRoot != null) _panelRoot.SetActive(true);
+            RefreshShop();
+        }
 
-        /// <summary>切换商品分类</summary>
-        public void SwitchCategory(ShopCategory category) { }
+        public void Hide()
+        {
+            if (_panelRoot != null) _panelRoot.SetActive(false);
+        }
 
-        /// <summary>刷新商品列表和货币余额</summary>
-        public void RefreshShop() { }
+        public void SwitchCategory(ShopCategory category)
+        {
+            _currentCategory = category;
+            RefreshShop();
+        }
 
-        /// <summary>显示商品详情</summary>
-        public void ShowItemDetail(ShopItemData item) { }
+        public void RefreshShop()
+        {
+            StartCoroutine(FetchShopItems());
+        }
 
-        /// <summary>购买选中商品</summary>
-        public void BuySelectedItem() { }
+        public void BuyItem(ShopItemData item)
+        {
+            PopupManager.Instance?.ShowConfirm("购买确认",
+                $"确定花费 {item.price} {item.currencyType} 购买 {item.name} 吗？",
+                () => StartCoroutine(SendPurchaseRequest(item.id)),
+                null, "购买", "取消");
+        }
 
         // === 私有方法 ===
-        private IEnumerator<Coroutine> FetchShopItems() { yield return null; }
-        private void PopulateItemGrid(List<ShopItemData> items) { }
-        private void SetupShopItemCard(GameObject card, ShopItemData data) { }
-        private IEnumerator<Coroutine> SendPurchaseRequest(string itemId) { yield return null; }
-        private void UpdateCurrencyDisplay() { }
 
-        // === 事件 ===
-        public event Action OnPanelClosed;
-        public event Action<ShopItemData> OnItemPurchased;
+        private System.Collections.IEnumerator FetchShopItems()
+        {
+            // TODO: GET /api/v1/shop/items?category={category}
+            yield return new WaitForSeconds(0.2f);
+            _items = CreateMockItems(_currentCategory);
+            PopulateGrid();
+            UpdateCurrencyDisplay();
+        }
 
-        // === 按钮回调 ===
-        private void OnItemTabClicked() { }
-        private void OnSkinTabClicked() { }
-        private void OnEnergyTabClicked() { }
-        private void OnPackTabClicked() { }
-        private void OnCloseClicked() { }
-        private void OnDetailBuyClicked() { }
-        private void OnDetailCloseClicked() { }
+        private void PopulateGrid()
+        {
+            if (_itemGrid == null || _shopItemPrefab == null) return;
+
+            foreach (Transform child in _itemGrid.transform)
+                Destroy(child.gameObject);
+
+            foreach (var item in _items)
+            {
+                GameObject card = Instantiate(_shopItemPrefab, _itemGrid.transform);
+                SetupCard(card, item);
+            }
+        }
+
+        private void SetupCard(GameObject card, ShopItemData item)
+        {
+            var texts = card.GetComponentsInChildren<TextMeshProUGUI>();
+            foreach (var t in texts)
+            {
+                if (t.name.Contains("Name")) t.text = item.name;
+                else if (t.name.Contains("Price")) t.text = $"{item.currencyType}: {item.price}";
+                else if (t.name.Contains("Desc")) t.text = item.description;
+            }
+
+            var btn = card.GetComponentInChildren<Button>();
+            if (btn != null) btn.onClick.AddListener(() => BuyItem(item));
+        }
+
+        private System.Collections.IEnumerator SendPurchaseRequest(string itemId)
+        {
+            // TODO: POST /api/v1/shop/purchase { itemId, quantity: 1 }
+            yield return new WaitForSeconds(0.5f);
+            ToastManager.Instance?.ShowSuccess("购买成功！");
+            RefreshShop();
+        }
+
+        private void UpdateCurrencyDisplay()
+        {
+            var userData = GetUserData();
+            if (_goldText != null) _goldText.text = $"💰 {userData?.gold ?? 0}";
+            if (_diamondText != null) _diamondText.text = $"💎 {userData?.diamond ?? 0}";
+        }
+
+        private Data.UserData GetUserData()
+        {
+            // TODO: 从 Data 层获取当前用户数据
+            return null;
+        }
+
+        private List<ShopItemData> CreateMockItems(ShopCategory category)
+        {
+            var list = new List<ShopItemData>();
+            if (category == ShopCategory.Item || category == ShopCategory.Pack)
+            {
+                list.Add(new ShopItemData { id = "skip_card", name = "跳过卡", currencyType = "gold", price = 100, description = "跳过当前题目" });
+                list.Add(new ShopItemData { id = "double_card", name = "加倍卡", currencyType = "diamond", price = 5, description = "本题得分×2" });
+                list.Add(new ShopItemData { id = "freeze_card", name = "冻结卡", currencyType = "diamond", price = 10, description = "冻结对手5秒" });
+                list.Add(new ShopItemData { id = "energy_potion", name = "体力药水", currencyType = "gold", price = 200, description = "恢复30点体力" });
+            }
+            return list;
+        }
     }
 }

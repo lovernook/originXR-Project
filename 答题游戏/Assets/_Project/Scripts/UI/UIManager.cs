@@ -5,88 +5,217 @@ using System.Collections.Generic;
 namespace OriginXR.UI
 {
     /// <summary>
-    /// UI 总控管理器（栈式管理）
+    /// UI 总控管理器（单例，栈式面板管理）
     /// 负责：
-    /// 1. 管理所有 UI 面板的生命周期（打开/关闭/切换）
-    /// 2. 使用栈（Stack）管理面板层级，支持返回上一级面板
-    /// 3. 提供统一的 ShowPanel / HidePanel / GoBack 接口
-    /// 4. 管理 UI 面板之间的数据传递
-    /// 5. 处理 Android 返回键 / ESC 键的返回逻辑
-    ///
-    /// 面板层级（从下到上）：
-    ///   LobbyHUD (常驻) -> 功能面板 -> 二级面板 -> 弹窗 -> Toast
-    ///
-    /// 面板名称常量：
-    ///   RankPanel, ShopPanel, BagPanel, AchievementPanel, SettingsPanel,
-    ///   StageSelectPanel, DailyChallengePanel, KnowledgeDetailPanel,
-    ///   MailPanel, ActivityPanel
+    /// 1. 统一管理所有 UI 面板的生命周期（注册/打开/关闭）
+    /// 2. 栈式管理面板层级，支持返回上一级
+    /// 3. 处理 ESC/Android 返回键的返回逻辑
+    /// 4. 阻止底层输入遮罩
     /// </summary>
     public class UIManager : MonoBehaviour
     {
+        [Header("UI 根节点")]
+        [SerializeField] private Canvas _mainCanvas;
+        [SerializeField] private Transform _panelRoot;
+        [SerializeField] private Transform _popupRoot;
+        [SerializeField] private Transform _toastRoot;
+        [SerializeField] private GameObject _blockInputMask;      // 面板打开时阻止底层点击
+
         // === 单例 ===
         public static UIManager Instance { get; private set; }
 
-        // === UI 组件 ===
-        [SerializeField] private Canvas _mainCanvas;           // 主 UI Canvas
-        [SerializeField] private Transform _panelRoot;         // 面板根节点
-        [SerializeField] private Transform _popupRoot;         // 弹窗根节点
-        [SerializeField] private Transform _toastRoot;         // Toast 根节点
-        [SerializeField] private GameObject _blockInputMask;   // 阻止点击的遮罩
+        // === 内部状态 ===
+        private Stack<UIPanelEntry> _panelStack = new Stack<UIPanelEntry>();
+        private Dictionary<string, GameObject> _panelPrefabs = new Dictionary<string, GameObject>();
+        private Dictionary<string, GameObject> _activePanels = new Dictionary<string, GameObject>();
 
-        // === 运行时数据 ===
-        private Stack<string> _panelStack;                     // 面板栈（面板名称）
-        private Dictionary<string, GameObject> _panelInstances; // 面板名称 -> 实例
-        private Dictionary<string, GameObject> _panelPrefabs;   // 面板名称 -> 预制体
+        // === 事件 ===
+        public event Action<string> OnPanelOpened;
+        public event Action<string> OnPanelClosed;
+
+        // === 内部类 ===
+        private class UIPanelEntry
+        {
+            public string panelName;
+            public object data;
+        }
 
         // === Unity 生命周期 ===
-        private void Awake() { }
-        private void Start() { }
-        private void Update() { }                              // 处理 ESC/返回键
+
+        private void Awake()
+        {
+            if (Instance != null && Instance != this) { Destroy(gameObject); return; }
+            Instance = this;
+            DontDestroyOnLoad(gameObject);
+
+            if (_blockInputMask != null)
+                _blockInputMask.SetActive(false);
+        }
+
+        private void Update()
+        {
+            HandleBackKey();
+        }
+
+        private void OnDestroy()
+        {
+            if (Instance == this) Instance = null;
+        }
 
         // === 公共方法 ===
 
         /// <summary>注册面板预制体</summary>
-        /// <param name="panelName">面板名称</param>
-        /// <param name="prefab">面板预制体</param>
-        public void RegisterPanel(string panelName, GameObject prefab) { }
+        public void RegisterPanel(string panelName, GameObject prefab)
+        {
+            if (string.IsNullOrEmpty(panelName) || prefab == null) return;
+            _panelPrefabs[panelName] = prefab;
+        }
 
-        /// <summary>显示面板（推入栈顶）</summary>
-        /// <param name="panelName">面板名称</param>
-        /// <param name="data">传递的数据（可为 null）</param>
-        public void ShowPanel(string panelName, object data = null) { }
+        /// <summary>打开面板（推入栈顶），可传递数据</summary>
+        public void ShowPanel(string panelName, object data = null)
+        {
+            if (string.IsNullOrEmpty(panelName)) return;
+            if (_panelRoot == null) { Debug.LogError("[UIManager] PanelRoot 未配置"); return; }
 
-        /// <summary>关闭当前面板（弹出栈顶），返回上一级</summary>
-        public void HidePanel() { }
+            // 如果面板已在栈顶，不重复打开
+            if (_panelStack.Count > 0 && _panelStack.Peek().panelName == panelName)
+                return;
+
+            // 实例化面板
+            GameObject panelObj = GetOrCreatePanelInstance(panelName);
+            if (panelObj == null) return;
+
+            // 激活面板
+            panelObj.SetActive(true);
+            panelObj.transform.SetAsLastSibling();
+
+            // 推送数据（如果面板实现了 IDataReceiver）
+            if (data != null)
+            {
+                var receivers = panelObj.GetComponents<IDataReceiver>();
+                foreach (var receiver in receivers)
+                    receiver.ReceiveData(data);
+            }
+
+            // 推入栈
+            _panelStack.Push(new UIPanelEntry { panelName = panelName, data = data });
+
+            // 更新遮罩
+            UpdateBlockMask();
+
+            OnPanelOpened?.Invoke(panelName);
+            Debug.Log($"[UIManager] 面板已打开: {panelName} (栈深度: {_panelStack.Count})");
+        }
+
+        /// <summary>关闭当前栈顶面板</summary>
+        public void HidePanel()
+        {
+            if (_panelStack.Count == 0) return;
+
+            UIPanelEntry entry = _panelStack.Pop();
+            if (_activePanels.TryGetValue(entry.panelName, out var panelObj))
+            {
+                panelObj.SetActive(false);
+            }
+
+            UpdateBlockMask();
+            OnPanelClosed?.Invoke(entry.panelName);
+            Debug.Log($"[UIManager] 面板已关闭: {entry.panelName} (栈深度: {_panelStack.Count})");
+        }
 
         /// <summary>关闭指定面板</summary>
-        public void HidePanel(string panelName) { }
+        public void HidePanel(string panelName)
+        {
+            if (_activePanels.TryGetValue(panelName, out var panelObj))
+            {
+                panelObj.SetActive(false);
+            }
 
-        /// <summary>返回上一级面板（不做任何操作则不处理）</summary>
-        public void GoBack() { }
+            // 从栈中移除
+            var tempStack = new Stack<UIPanelEntry>();
+            while (_panelStack.Count > 0)
+            {
+                var entry = _panelStack.Pop();
+                if (entry.panelName != panelName)
+                    tempStack.Push(entry);
+            }
+            while (tempStack.Count > 0)
+                _panelStack.Push(tempStack.Pop());
 
-        /// <summary>关闭所有面板（回到主城 HUD）</summary>
-        public void HideAllPanels() { }
+            UpdateBlockMask();
+            OnPanelClosed?.Invoke(panelName);
+        }
 
-        /// <summary>获取当前打开的面板名称</summary>
-        public string GetCurrentPanelName() { return _panelStack.Count > 0 ? _panelStack.Peek() : null; }
+        /// <summary>关闭所有面板</summary>
+        public void HideAllPanels()
+        {
+            while (_panelStack.Count > 0)
+                HidePanel();
+        }
 
-        /// <summary>是否打开了指定面板</summary>
-        public bool IsPanelOpen(string panelName) { return _panelStack.Contains(panelName); }
+        /// <summary>获取当前栈顶面板名称</summary>
+        public string GetCurrentPanelName()
+        {
+            return _panelStack.Count > 0 ? _panelStack.Peek().panelName : null;
+        }
 
-        /// <summary>显示/隐藏阻止输入遮罩</summary>
-        public void SetBlockInput(bool block) { }
+        /// <summary>判断面板是否打开</summary>
+        public bool IsPanelOpen(string panelName)
+        {
+            if (_activePanels.TryGetValue(panelName, out var panelObj))
+                return panelObj.activeSelf;
+            return false;
+        }
+
+        /// <summary>获取面板实例</summary>
+        public GameObject GetPanel(string panelName)
+        {
+            _activePanels.TryGetValue(panelName, out var panel);
+            return panel;
+        }
 
         // === 私有方法 ===
-        private GameObject GetOrCreatePanelInstance(string panelName) { return null; }
-        private void PushPanel(string panelName) { }
-        private void PopPanel() { }
-        private void HandleBackKey() { }
 
-        // === 事件 ===
-        /// <summary>面板打开事件</summary>
-        public event Action<string> OnPanelOpened;
+        private GameObject GetOrCreatePanelInstance(string panelName)
+        {
+            if (_activePanels.TryGetValue(panelName, out var existing))
+                return existing;
 
-        /// <summary>面板关闭事件</summary>
-        public event Action<string> OnPanelClosed;
+            if (!_panelPrefabs.TryGetValue(panelName, out var prefab))
+            {
+                Debug.LogWarning($"[UIManager] 面板预制体未注册: {panelName}");
+                return null;
+            }
+
+            GameObject instance = Instantiate(prefab, _panelRoot);
+            instance.name = panelName;
+            _activePanels[panelName] = instance;
+            return instance;
+        }
+
+        private void UpdateBlockMask()
+        {
+            if (_blockInputMask != null)
+                _blockInputMask.SetActive(_panelStack.Count > 0);
+        }
+
+        private void HandleBackKey()
+        {
+            if (_panelStack.Count == 0) return;
+
+            if (Input.GetKeyDown(KeyCode.Escape))
+            {
+                HidePanel();
+            }
+        }
+    }
+
+    /// <summary>
+    /// 数据接收接口
+    /// 面板实现此接口后可通过 ShowPanel(name, data) 接收数据
+    /// </summary>
+    public interface IDataReceiver
+    {
+        void ReceiveData(object data);
     }
 }

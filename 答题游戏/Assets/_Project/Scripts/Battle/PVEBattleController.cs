@@ -1,119 +1,180 @@
 using UnityEngine;
+using UnityEngine.UI;
 using System;
 using System.Collections;
-using System.Collections.Generic;
 using OriginXR.Data;
-using OriginXR.Core;
 
 namespace OriginXR.Battle
 {
     /// <summary>
+    /// PVE 战斗结束原因
+    /// </summary>
+    public enum BattleEndReason
+    {
+        None,
+        BossDefeated,
+        LivesExhausted,
+        QuestionsDone,
+        PlayerQuit
+    }
+
+    /// <summary>
     /// PVE 对战逻辑控制器
     /// 负责：
-    /// 1. 管理 PVE 模式（闯关推图）的专属逻辑
-    /// 2. 处理"强化学者"对话形式弹出题目
-    /// 3. 玩家 Avatar + BOSS Avatar 的伤害/受击动画协调
-    /// 4. 连击伤害倍率计算（连续3题1.5x, 5题2x, 10题3x）
-    /// 5. 3条命机制管理（答错扣命，耗尽重新挑战）
-    /// 6. 通关结算：经验/金币/星数/章节徽章
-    ///
-    /// 战斗流程：
-    ///   1. 玩家选择关卡 -> POST /api/v1/game/stages/:id/start
-    ///   2. 服务端下发题目列表（已根据关卡题目池抽取）
-    ///   3. 逐题展示 -> 玩家作答 -> 判定结果 -> BOSS动画
-    ///   4. 全部答完或BOSS击败 -> POST /api/v1/game/stages/:id/finish
-    ///   5. 服务端返回结算数据
-    ///
-    /// 与 BattleManager 的关系：
-    ///   BattleManager 负责任务分发和状态管理
-    ///   PVEBattleController 负责 PVE 特有逻辑（生命数、BOSS交互、关卡进度）
+    /// 1. PVE 专属逻辑：3条命管理、连击伤害倍率
+    /// 2. BOSS 交互协调（答题对错 → BOSS 受伤/攻击）
+    /// 3. 对话气泡展示（"强化学者"答题提示）
+    /// 4. 生命耗尽判定与战斗结束
     /// </summary>
     public class PVEBattleController : MonoBehaviour
     {
-        // === 配置 ===
-        /// <summary>每关基础生命数</summary>
+        [Header("生命系统")]
         [SerializeField] private int _baseLives = 3;
+        [SerializeField] private Image[] _lifeIcons;                // 生命图标（3个）
+        [SerializeField] private Sprite _lifeIconFull;
+        [SerializeField] private Sprite _lifeIconEmpty;
 
-        /// <summary>连续答对触发连击的阈值</summary>
-        [SerializeField] private int _comboThreshold = 3;
+        [Header("对话气泡")]
+        [SerializeField] private GameObject _dialogueBubble;
+        [SerializeField] private TMPro.TextMeshProUGUI _dialogueText;
+        [SerializeField] private float _dialogueShowTime = 2f;      // 对话显示时长
 
-        /// <summary>双倍伤害连击阈值（5连击）</summary>
-        [SerializeField] private int _superComboThreshold = 5;
+        [Header("连击倍率")]
+        [SerializeField] private float _comboMultiplier3 = 1.5f;
+        [SerializeField] private float _comboMultiplier5 = 2f;
+        [SerializeField] private float _comboMultiplier10 = 3f;
 
-        // === 组件引用 ===
+        [Header("组件引用")]
         [SerializeField] private BossController _bossController;
-        [SerializeField] private ComboEffectController _comboEffectController;
-        [SerializeField] private UnityEngine.UI.Image[] _lifeIcons;     // 生命图标
-        [SerializeField] private GameObject _dialogueBubble;            // 学者对话气泡
+        [SerializeField] private ComboEffectController _comboEffect;
 
         // === 属性 ===
-        /// <summary>当前剩余生命数</summary>
         public int RemainingLives { get; private set; }
+        public bool IsBossDefeated => _bossController != null && _bossController.IsDefeated();
 
-        /// <summary>当前连击数</summary>
-        public int CurrentCombo { get; private set; }
-
-        /// <summary>是否已击败BOSS</summary>
-        public bool IsBossDefeated { get; private set; }
-
-        /// <summary>当前关卡数据</summary>
-        public StageData CurrentStage { get; private set; }
+        // === 事件 ===
+        public event Action<BattleEndReason> OnPVEBattleEnd;
+        public event Action<int> OnLivesChanged;
 
         // === Unity 生命周期 ===
-        private void Start() { }
+
+        private void Start()
+        {
+            if (_dialogueBubble != null)
+                _dialogueBubble.SetActive(false);
+        }
 
         // === 公共方法 ===
 
         /// <summary>初始化 PVE 战斗</summary>
-        /// <param name="stageData">关卡数据</param>
-        public void Initialize(StageData stageData) { }
+        public void Initialize(StageData stageData)
+        {
+            RemainingLives = _baseLives;
+            UpdateLifeIcons();
 
-        /// <summary>处理玩家正确答题</summary>
-        /// <param name="questionId">题目ID</param>
-        /// <param name="scoreGained">获得分数</param>
-        public void HandleCorrectAnswer(string questionId, int scoreGained) { }
+            // 初始化 BOSS
+            if (_bossController != null && stageData != null)
+            {
+                _bossController.Initialize(stageData.bossModelId, stageData.bossName, stageData.bossHP);
+            }
 
-        /// <summary>处理玩家错误答题</summary>
-        /// <param name="questionId">题目ID</param>
-        public void HandleWrongAnswer(string questionId) { }
+            Debug.Log($"[PVEBattleController] 初始化完成，生命数: {RemainingLives}");
+        }
 
-        /// <summary>检查是否战斗结束（生命耗尽 或 BOSS击败 或 题目用尽）</summary>
-        public BattleEndReason CheckBattleEnd() { return BattleEndReason.None; }
+        /// <summary>处理正确答题</summary>
+        public void HandleCorrectAnswer(string questionId, int baseScore)
+        {
+            // 计算连击加成
+            float multiplier = GetComboDamageMultiplier();
+            int damage = Mathf.RoundToInt(100 * multiplier);
+            bool isCombo = _comboEffect != null && _comboEffect.IsComboActive();
 
-        /// <summary>执行结算流程</summary>
-        public void ExecuteSettlement() { }
+            // BOSS 受伤
+            _bossController?.TakeDamage(damage, isCombo);
+
+            // 对话气泡（随机鼓励语）
+            string[] encouragements = { "漂亮！", "太棒了！", "答对了！", "继续保持！", "完美一击！" };
+            string msg = encouragements[UnityEngine.Random.Range(0, encouragements.Length)];
+            if (isCombo) msg = $"连击 ×{_comboEffect.GetComboCount()}！{msg}";
+            ShowDialogue(msg);
+
+            // 检查 BOSS 是否被击败
+            if (_bossController != null && _bossController.IsDefeated())
+            {
+                OnPVEBattleEnd?.Invoke(BattleEndReason.BossDefeated);
+            }
+        }
+
+        /// <summary>处理错误答题</summary>
+        public void HandleWrongAnswer(string questionId)
+        {
+            RemainingLives--;
+            UpdateLifeIcons();
+            OnLivesChanged?.Invoke(RemainingLives);
+
+            // BOSS 攻击
+            _bossController?.PlayAttack();
+
+            // 对话气泡
+            string[] discouragements = { "小心！", "再想想...", "没关系的！", "加油！", "别气馁！" };
+            ShowDialogue(discouragements[UnityEngine.Random.Range(0, discouragements.Length)]);
+
+            // 生命耗尽
+            if (RemainingLives <= 0)
+            {
+                OnPVEBattleEnd?.Invoke(BattleEndReason.LivesExhausted);
+            }
+        }
+
+        /// <summary>检查战斗是否结束</summary>
+        public BattleEndReason CheckBattleEnd()
+        {
+            if (RemainingLives <= 0) return BattleEndReason.LivesExhausted;
+            if (IsBossDefeated) return BattleEndReason.BossDefeated;
+            return BattleEndReason.None;
+        }
 
         /// <summary>获取连击伤害倍率</summary>
         public float GetComboDamageMultiplier()
         {
-            if (CurrentCombo >= _superComboThreshold) return 2f;
-            if (CurrentCombo >= _comboThreshold) return 1.5f;
+            if (_comboEffect == null) return 1f;
+            int combo = _comboEffect.GetComboCount();
+            if (combo >= 10) return _comboMultiplier10;
+            if (combo >= 5) return _comboMultiplier5;
+            if (combo >= 3) return _comboMultiplier3;
             return 1f;
         }
 
         // === 私有方法 ===
-        private void UpdateLifeIcons() { }
-        private void ShowDialogueBubble(string message) { }
-        private void HideDialogueBubble() { }
-        private int CalculateDamage(bool isComboActive) { return 0; }
-        private void HandleLifeLost() { }
-        private IEnumerator PlayRetryDialog() { yield return null; }
 
-        // === 事件 ===
-        /// <summary>战斗结束事件</summary>
-        public event Action<BattleEndReason> OnPVEBattleEnd;
+        private void UpdateLifeIcons()
+        {
+            if (_lifeIcons == null) return;
 
-        /// <summary>生命数变化事件</summary>
-        public event Action<int> OnLivesChanged;
-    }
+            for (int i = 0; i < _lifeIcons.Length; i++)
+            {
+                if (_lifeIcons[i] != null)
+                {
+                    _lifeIcons[i].sprite = i < RemainingLives ? _lifeIconFull : _lifeIconEmpty;
+                }
+            }
+        }
 
-    /// <summary>PVE 战斗结束原因</summary>
-    public enum BattleEndReason
-    {
-        None,           // 未结束
-        BossDefeated,   // BOSS 被击败
-        LivesExhausted, // 生命耗尽
-        QuestionsDone,  // 题目答完（最终结算）
-        PlayerQuit      // 玩家主动退出
+        private void ShowDialogue(string message)
+        {
+            if (_dialogueBubble == null || _dialogueText == null) return;
+
+            StopAllCoroutines();
+            _dialogueBubble.SetActive(true);
+            _dialogueText.text = message;
+            StartCoroutine(HideDialogueAfterDelay(_dialogueShowTime));
+        }
+
+        private IEnumerator HideDialogueAfterDelay(float delay)
+        {
+            yield return new WaitForSeconds(delay);
+            if (_dialogueBubble != null)
+                _dialogueBubble.SetActive(false);
+        }
     }
 }
