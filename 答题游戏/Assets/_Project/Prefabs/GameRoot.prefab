@@ -1,0 +1,193 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &184818912851305580
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 2158298518583171882}
+  - component: {fileID: 4696856521350201234}
+  - component: {fileID: 537649484188363028}
+  - component: {fileID: 4833443985518527213}
+  - component: {fileID: 126062999071405067}
+  - component: {fileID: 7749387783153266519}
+  - component: {fileID: 484039176239190817}
+  - component: {fileID: 4971706742543446959}
+  - component: {fileID: 6306101667789230788}
+  m_Layer: 0
+  m_Name: GameRoot
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &2158298518583171882
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 184818912851305580}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &4696856521350201234
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 184818912851305580}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4fd2463c92b0e5947a80654e9cc0d64a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _audioManager: {fileID: 7749387783153266519}
+  _networkManager: {fileID: 537649484188363028}
+  _httpManager: {fileID: 4833443985518527213}
+  _sceneLoader: {fileID: 126062999071405067}
+--- !u!114 &537649484188363028
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 184818912851305580}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c9d64b3e1e148684b9cac91cdd1a8e8a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _heartbeatInterval: 15
+  _heartbeatTimeout: 30
+  _maxReconnectAttempts: 5
+  _baseReconnectDelay: 2
+  _maxReconnectDelay: 30
+  _receiveBufferSize: 4096
+--- !u!114 &4833443985518527213
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 184818912851305580}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6f0b54c825a2cb84186c3ac092c592cc, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _requestTimeout: 30
+  _maxRetries: 2
+  _retryDelay: 1
+--- !u!114 &126062999071405067
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 184818912851305580}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 077ca74087ae39b4390707ec73d00897, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _loadingCanvas: {fileID: 0}
+  _loadingBackground: {fileID: 0}
+  _progressSlider: {fileID: 0}
+  _progressText: {fileID: 0}
+  _tipText: {fileID: 0}
+  _spinnerTransform: {fileID: 0}
+  _loadingTips:
+  - "\u77E5\u8BC6\u5C31\u662F\u529B\u91CF\uFF01"
+  - "\u6E29\u6545\u800C\u77E5\u65B0\uFF0C\u53EF\u4EE5\u4E3A\u5E08\u77E3\u3002"
+  - "\u6BCF\u5929\u8FDB\u6B65\u4E00\u70B9\u70B9~"
+  - "\u5B66\u800C\u4E0D\u601D\u5219\u7F54\uFF0C\u601D\u800C\u4E0D\u5B66\u5219\u6B86\u3002"
+  - "\u6B63\u5728\u51C6\u5907\u9898\u76EE..."
+  - "\u6B63\u5728\u53EC\u5524BOSS..."
+  _minLoadTime: 1.5
+  _spinnerSpeed: 360
+--- !u!114 &7749387783153266519
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 184818912851305580}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 40614a3174c50114e94622dee8907a63, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _audioMixer: {fileID: 0}
+  _bgmSource: {fileID: 0}
+  _sfxSourceA: {fileID: 0}
+  _sfxSourceB: {fileID: 0}
+  _sfx3DPoolSize: 10
+  _defaultBGMVolume: 0.8
+  _defaultSFXVolume: 1
+  _defaultUIVolume: 1
+--- !u!114 &484039176239190817
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 184818912851305580}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0da1a595b6cebba498299d446c1a20f6, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _mainCanvas: {fileID: 0}
+  _panelRoot: {fileID: 0}
+  _popupRoot: {fileID: 0}
+  _toastRoot: {fileID: 0}
+  _blockInputMask: {fileID: 0}
+--- !u!114 &4971706742543446959
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 184818912851305580}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e128b8e297a6c3943a9ac231ed3a8dfd, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _popupCanvas: {fileID: 0}
+  _dimBackground: {fileID: 0}
+  _popupContainer: {fileID: 0}
+  _openDuration: 0.3
+  _closeDuration: 0.2
+--- !u!114 &6306101667789230788
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 184818912851305580}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f761343d38cf8b24cb13221286dc0de3, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _toastPrefab: {fileID: 0}
+  _toastContainer: {fileID: 0}
+  _infoColor: {r: 0.2, g: 0.5, b: 1, a: 1}
+  _successColor: {r: 0.2, g: 0.8, b: 0.3, a: 1}
+  _warningColor: {r: 1, g: 0.8, b: 0.2, a: 1}
+  _errorColor: {r: 1, g: 0.3, b: 0.3, a: 1}
+  _displayDuration: 2
+  _fadeInDuration: 0.3
+  _fadeOutDuration: 0.3
+  _slideDistance: 80
