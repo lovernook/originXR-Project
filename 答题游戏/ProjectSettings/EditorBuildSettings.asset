@@ -23,4 +23,7 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/_Project/Scenes/SplashScene.unity
     guid: 1cd774e1045c5f94e8053f1413989535
+  - enabled: 1
+    path: Assets/_Project/Scenes/HomeScene.unity
+    guid: 4e2ae3435f948c1438d9a46c34e1a4b0
   m_configObjects: {}
