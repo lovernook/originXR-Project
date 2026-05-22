@@ -186,6 +186,7 @@ namespace OriginXR.Lobby
         [Header("目标配置")]
         public string targetSceneName = "";
         public string targetPanelName = "";
+        public Vector2 teleportTargetPosition;
 
         [Header("事件")]
         public UnityEvent onInteract;

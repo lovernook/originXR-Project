@@ -18,6 +18,16 @@ namespace OriginXR.Battle
     /// </summary>
     public class QuestionDisplay : MonoBehaviour
     {
+        // === 公开属性（BattleSceneSetup 通过这里赋值） ===
+        public TextMeshProUGUI questionText { get => _questionText; set => _questionText = value; }
+        public TextMeshProUGUI questionIndexText { get => _questionIndexText; set => _questionIndexText = value; }
+        public Button[] optionButtons { get => _singleButtons; set { _singleButtons = value; RebindButtons(); } }
+        public Image[] optionBackgrounds { get => _singleButtonBg; set => _singleButtonBg = value; }
+        public TextMeshProUGUI[] optionTexts { get => _singleButtonTexts; set => _singleButtonTexts = value; }
+        public GameObject resultPanel { get => _resultPanel; set => _resultPanel = value; }
+        public TextMeshProUGUI resultText { get => _resultText; set => _resultText = value; }
+        public TextMeshProUGUI explanationText { get => _explanationText; set => _explanationText = value; }
+
         [Header("题目 UI")]
         [SerializeField] private TextMeshProUGUI _questionText;
         [SerializeField] private TextMeshProUGUI _questionIndexText;    // "第3/10题"
@@ -71,20 +81,25 @@ namespace OriginXR.Battle
         // === 事件 ===
         public event Action<string> OnAnswerSubmitted;
 
+        /// <summary>重新绑定按钮点击事件（BattleSceneSetup 更改按钮数组后调用）</summary>
+        public void RebindButtons()
+        {
+            if (_singleButtons == null) return;
+
+            for (int i = 0; i < _singleButtons.Length; i++)
+            {
+                if (_singleButtons[i] == null) continue;
+                _singleButtons[i].onClick.RemoveAllListeners();
+                int index = i;
+                _singleButtons[i].onClick.AddListener(() => OnSingleOptionClicked(index));
+            }
+        }
+
         // === Unity 生命周期 ===
 
         private void Awake()
         {
-            // 绑定选项按钮事件
-            if (_singleButtons != null)
-            {
-                for (int i = 0; i < _singleButtons.Length; i++)
-                {
-                    int index = i;
-                    if (_singleButtons[i] != null)
-                        _singleButtons[i].onClick.AddListener(() => OnSingleOptionClicked(index));
-                }
-            }
+            RebindButtons();
 
             if (_trueButton != null) _trueButton.onClick.AddListener(() => OnSingleOptionClicked(0));
             if (_falseButton != null) _falseButton.onClick.AddListener(() => OnSingleOptionClicked(1));
@@ -142,6 +157,9 @@ namespace OriginXR.Battle
 
             // 清除选项高亮
             ResetOptionHighlights();
+
+            // 重新启用按钮（上一题的 ShowResult 禁用了它们）
+            SetOptionsInteractable(true);
 
             // 加载媒体素材
             LoadQuestionMedia(question.mediaUrl);

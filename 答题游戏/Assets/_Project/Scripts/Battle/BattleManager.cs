@@ -102,6 +102,8 @@ namespace OriginXR.Battle
 
         private void InitializeSubsystems()
         {
+            Debug.Log($"[BattleManager] 初始化子系统... display={_questionDisplay != null} timer={_timerController != null} answer={_answerHandler != null} pve={_pveController != null}");
+
             if (_questionDisplay != null)
                 _questionDisplay.OnAnswerSubmitted += SubmitAnswer;
 
@@ -163,10 +165,19 @@ namespace OriginXR.Battle
             ChangeState(BattleState.Question);
 
             QuestionData question = QuestionList[CurrentQuestionIndex];
+            Debug.Log($"[BattleManager] 显示第{CurrentQuestionIndex + 1}题, timerController={(_timerController != null ? "已绑定" : "NULL!")}");
+
             _questionDisplay?.DisplayQuestion(question, CurrentQuestionIndex + 1, TotalQuestionCount);
 
             if (_timerController != null)
+            {
+                Debug.Log($"[BattleManager] 启动倒计时: {question.timeLimit}s");
                 _timerController.StartCountdown(question.timeLimit > 0 ? question.timeLimit : 10f);
+            }
+            else
+            {
+                Debug.LogError("[BattleManager] _timerController 为 NULL！请检查 Inspector 引用");
+            }
 
             _questionStartTime = Time.time;
             OnQuestionChanged?.Invoke(question, CurrentQuestionIndex);
