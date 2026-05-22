@@ -631,7 +631,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   _homeSceneName: HomeScene
   _battleSceneName: BattleScene
-  _knowledgeSceneName: KnowledgeVisualizationScene
+  _stageSelectPanel: {fileID: 0}
   _shopPanelName: ShopPanel
   _settingsPanelName: SettingsPanel
 --- !u!1 &699026413
@@ -2644,7 +2644,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &1717410116
 RectTransform:
   m_ObjectHideFlags: 0

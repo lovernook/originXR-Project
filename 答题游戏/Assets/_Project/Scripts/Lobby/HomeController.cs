@@ -33,12 +33,7 @@ namespace OriginXR.Home
                 SceneLoader.Instance?.LoadScene(_battleSceneName);
         }
 
-        /// <summary>点击 PVE 爬塔按钮</summary>
-        public void OnPVEClicked()
-        {
-            Core.AudioManager.Instance?.PlayUISFX("button_click");
-            SceneLoader.Instance?.LoadScene(_battleSceneName);
-        }
+       
 
         /// <summary>点击每日挑战按钮</summary>
         public void OnDailyClick()
