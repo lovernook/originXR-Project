@@ -32,28 +32,50 @@ namespace OriginXR.Battle
                 return;
             }
 
-            // 读取选中的关卡ID
-            int stageId = PlayerPrefs.GetInt("CurrentStageId", 1);
-            string[] stageNames = {
-                "变量入门", "数据类型", "条件判断", "循环结构",
-                "数组基础", "函数入门", "面向对象", "继承多态",
-                "接口抽象", "异常处理", "泛型集合", "文件操作"
-            };
-            string stageName = stageId <= stageNames.Length ? stageNames[stageId - 1] : $"第{stageId}关";
+            bool isDailyMode = PlayerPrefs.GetInt("IsDailyMode", 0) == 1;
+            PlayerPrefs.SetInt("IsDailyMode", 0);  // 用完重置
+            PlayerPrefs.Save();
 
-            var stageData = new OriginXR.Data.StageData
+            OriginXR.Data.StageData stageData;
+
+            if (isDailyMode)
             {
-                id = $"stage_{stageId:D3}",
-                name = $"第{stageId}关 · {stageName}",
-                bossName = $"知识守卫 Lv.{stageId}",
-                bossHP = 500 + stageId * 250,
-                questionCount = 3 + stageId,
-                timePerQuestion = 10,
-                rewardExp = 50 + stageId * 25,
-                rewardGold = 30 + stageId * 10
-            };
+                stageData = new OriginXR.Data.StageData
+                {
+                    id = "daily_challenge",
+                    name = "每日挑战",
+                    bossName = "今日BOSS",
+                    bossHP = 800,
+                    questionCount = 10,
+                    timePerQuestion = 10,
+                    rewardExp = 200,
+                    rewardGold = 100
+                };
+                Debug.Log("[TestBattleStarter] 开始每日挑战模式");
+            }
+            else
+            {
+                int stageId = PlayerPrefs.GetInt("CurrentStageId", 1);
+                string[] stageNames = {
+                    "变量入门", "数据类型", "条件判断", "循环结构",
+                    "数组基础", "函数入门", "面向对象", "继承多态",
+                    "接口抽象", "异常处理", "泛型集合", "文件操作"
+                };
+                string stageName = stageId <= stageNames.Length ? stageNames[stageId - 1] : $"第{stageId}关";
 
-            Debug.Log($"[TestBattleStarter] 开始关卡: {stageData.name}");
+                stageData = new OriginXR.Data.StageData
+                {
+                    id = $"stage_{stageId:D3}",
+                    name = $"第{stageId}关 · {stageName}",
+                    bossName = $"知识守卫 Lv.{stageId}",
+                    bossHP = 500 + stageId * 250,
+                    questionCount = 3 + stageId,
+                    timePerQuestion = 10,
+                    rewardExp = 50 + stageId * 25,
+                    rewardGold = 30 + stageId * 10
+                };
+                Debug.Log($"[TestBattleStarter] 开始关卡: {stageData.name}");
+            }
 
             battleMgr.StartPVEBattle(stageData);
             Destroy(this);

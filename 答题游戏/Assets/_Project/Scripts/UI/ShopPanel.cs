@@ -152,8 +152,8 @@ namespace OriginXR.UI
         private void UpdateCurrencyDisplay()
         {
             var userData = GetUserData();
-            if (_goldText != null) _goldText.text = $"💰 {userData?.gold ?? 0}";
-            if (_diamondText != null) _diamondText.text = $"💎 {userData?.diamond ?? 0}";
+            if (_goldText != null) _goldText.text = $" {userData?.gold ?? 0}";
+            if (_diamondText != null) _diamondText.text = $" {userData?.diamond ?? 0}";
         }
 
         private Data.UserData GetUserData()

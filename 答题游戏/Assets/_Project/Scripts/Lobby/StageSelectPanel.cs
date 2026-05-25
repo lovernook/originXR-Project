@@ -39,12 +39,23 @@ namespace OriginXR.Home
                 closeButton.onClick.AddListener(Hide);
 
             CreateMockData();
-            PopulateStageList();
+        }
+
+        private void OnEnable()
+        {
+            // 确保列表刷新的兜底
+            if (_stages.Count > 0)
+                PopulateStageList();
         }
 
         public void Show()
         {
+            // 每次打开时重新创建数据（确保列表不为空）
+            if (_stages.Count == 0)
+                CreateMockData();
+
             gameObject.SetActive(true);
+            PopulateStageList();
         }
 
         public void Hide()
@@ -76,17 +87,36 @@ namespace OriginXR.Home
 
         private void PopulateStageList()
         {
-            if (contentRoot == null || stageItemPrefab == null) return;
+            Debug.Log($"[StageSelect] PopulateStageList: contentRoot={contentRoot != null}, prefab={stageItemPrefab != null}, stages={_stages.Count}");
+
+            if (contentRoot == null)
+            {
+                Debug.LogError("[StageSelect] contentRoot 为空！请在 Inspector 中拖入 ScrollView/Viewport/Content");
+                return;
+            }
+
+            if (stageItemPrefab == null)
+            {
+                Debug.LogError("[StageSelect] stageItemPrefab 为空！请把 StageItem 存为预制体并拖入");
+                return;
+            }
 
             // 清除旧条目
             foreach (Transform child in contentRoot)
                 Destroy(child.gameObject);
 
+            int createdCount = 0;
             foreach (var stage in _stages)
             {
                 GameObject item = Instantiate(stageItemPrefab, contentRoot);
                 SetupStageItem(item, stage);
+                createdCount++;
             }
+
+            Debug.Log($"[StageSelect] 创建了 {createdCount} 个关卡条目");
+
+            // 强制刷新布局
+            UnityEngine.UI.LayoutRebuilder.ForceRebuildLayoutImmediate(contentRoot as RectTransform);
         }
 
         private void SetupStageItem(GameObject item, StageInfo stage)
