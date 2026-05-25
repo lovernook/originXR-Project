@@ -33,14 +33,22 @@ namespace OriginXR.Battle
             {
                 if (stars[i] == null) continue;
 
-                // 初始化：放大 + 透明 + 激活
+                // 初始化：放大 + 激活
                 stars[i].gameObject.SetActive(true);
                 stars[i].transform.localScale = Vector3.one * _bigScale;
-                SetAlpha(stars[i], 0f);
 
-                // 只在星星数范围内亮起
                 bool isActive = i < starCount;
                 stars[i].color = isActive ? Color.white : new Color(0.3f, 0.3f, 0.3f, 1f);
+
+                if (isActive)
+                {
+                    SetAlpha(stars[i], 0f);  // 活跃星从透明开始
+                }
+                else
+                {
+                    stars[i].transform.localScale = Vector3.one * _finalScale;  // 非活跃直接缩小
+                    SetAlpha(stars[i], 1f);
+                }
 
                 if (isActive)
                 {

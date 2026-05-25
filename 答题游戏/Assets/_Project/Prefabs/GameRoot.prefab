@@ -17,6 +17,7 @@ GameObject:
   - component: {fileID: 8673502381975613391}
   - component: {fileID: 6070501681799660799}
   - component: {fileID: 4870171543442208733}
+  - component: {fileID: 5869514513193010771}
   m_Layer: 0
   m_Name: GameRoot
   m_TagString: Untagged
@@ -191,3 +192,16 @@ MonoBehaviour:
   _fadeInDuration: 0.3
   _fadeOutDuration: 0.3
   _slideDistance: 80
+--- !u!114 &5869514513193010771
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 184818912851305580}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8503fe40018a51b4c8a755e4aa98af8f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _defaultBank: {fileID: 11400000, guid: d0427d001db6bf242b3020bcbae52bd2, type: 2}

@@ -6,8 +6,6 @@ namespace OriginXR.Battle
 {
     /// <summary>
     /// BattleScene UI 绑定器
-    /// 把这个挂到 BattleSystem 上，在 Inspector 中拖好所有引用，
-    /// 启动时自动注入到 QuestionDisplay、TimerController 等管理器
     /// </summary>
     public class BattleSceneSetup : MonoBehaviour
     {
@@ -29,10 +27,18 @@ namespace OriginXR.Battle
         public TextMeshProUGUI scoreText;
         public TextMeshProUGUI comboText;
 
-        [Header("结算面板")]
+        [Header("BOSS")]
+        public BossController bossController;
+        public Slider bossHpSlider;
+
+        [Header("玩家血量")]
+        public Image[] playerHeartIcons;        // 3个心形Image
+        public Sprite heartFull;
+        public Sprite heartEmpty;
+
+        [Header("结算")]
         public SettlePanelController settlePanel;
 
-        // === 缓存 ===
         private QuestionDisplay _display;
         private TimerController _timer;
 
@@ -40,16 +46,12 @@ namespace OriginXR.Battle
         {
             _display = GetComponent<QuestionDisplay>();
             _timer = GetComponent<TimerController>();
-
             InjectReferences();
             RegisterEvents();
-
-            Debug.Log("[BattleSceneSetup] UI 绑定完成");
         }
 
         private void InjectReferences()
         {
-            // --- QuestionDisplay ---
             if (_display != null)
             {
                 _display.questionText = questionText;
@@ -59,31 +61,27 @@ namespace OriginXR.Battle
                 _display.resultPanel = resultPanel;
                 _display.resultText = resultText;
                 _display.explanationText = explanationText;
+                _display.BindButtons();
             }
-
-            // --- TimerController ---
-            if (_timer != null)
-            {
-                _timer.timerText = timerText;
-            }
+            if (_timer != null) _timer.timerText = timerText;
         }
 
         private void RegisterEvents()
         {
-            var battleMgr = BattleManager.Instance;
-            if (battleMgr != null)
-            {
-                battleMgr.OnComboChanged += UpdateComboUI;
-                battleMgr.OnQuestionChanged += UpdateScoreUI;
-                battleMgr.OnBattleFinished += ShowSettlement;
-            }
+            var mgr = BattleManager.Instance;
+            if (mgr == null) return;
+
+            mgr.OnComboChanged += UpdateComboUI;
+            mgr.OnQuestionChanged += UpdateScoreUI;
+            mgr.OnBattleFinished += ShowSettlement;
+            mgr.OnPlayerHPChanged += UpdatePlayerHP;
+            mgr.OnBossHPChanged += UpdateBossHP;
         }
 
-        private void UpdateScoreUI(OriginXR.Data.QuestionData question, int index)
+        private void UpdateScoreUI(OriginXR.Data.QuestionData q, int i)
         {
-            var mgr = BattleManager.Instance;
-            if (mgr != null && scoreText != null)
-                scoreText.text = $"得分: {mgr.CurrentScore}";
+            if (scoreText != null && BattleManager.Instance != null)
+                scoreText.text = $"得分: {BattleManager.Instance.CurrentScore}";
         }
 
         private void UpdateComboUI(int combo)
@@ -91,14 +89,29 @@ namespace OriginXR.Battle
             if (comboText != null)
             {
                 comboText.gameObject.SetActive(combo >= 3);
-                comboText.text = $"🔥 {combo}连击!";
+                comboText.text = $" {combo}连击!";
             }
         }
 
-        private void ShowSettlement(OriginXR.Data.StageResultData result)
+        private void UpdatePlayerHP(int current, int max)
         {
-            if (settlePanel != null)
-                settlePanel.Show(result);
+            if (playerHeartIcons == null) return;
+            for (int i = 0; i < playerHeartIcons.Length; i++)
+            {
+                if (playerHeartIcons[i] == null) continue;
+                playerHeartIcons[i].sprite = i < current ? heartFull : heartEmpty;
+            }
+        }
+
+        private void UpdateBossHP(int current, int max)
+        {
+            if (bossHpSlider != null)
+                bossHpSlider.value = max > 0 ? (float)current / max : 0f;
+        }
+
+        private void ShowSettlement(OriginXR.Data.StageResultData r)
+        {
+            if (settlePanel != null) settlePanel.Show(r);
         }
 
         private void OnDestroy()
@@ -109,6 +122,8 @@ namespace OriginXR.Battle
                 mgr.OnComboChanged -= UpdateComboUI;
                 mgr.OnQuestionChanged -= UpdateScoreUI;
                 mgr.OnBattleFinished -= ShowSettlement;
+                mgr.OnPlayerHPChanged -= UpdatePlayerHP;
+                mgr.OnBossHPChanged -= UpdateBossHP;
             }
         }
     }

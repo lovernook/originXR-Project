@@ -1,42 +1,56 @@
 using UnityEngine;
+using UnityEngine.UI;
 using TMPro;
-using OriginXR.Data;
 
 namespace OriginXR.Battle
 {
     /// <summary>
-    /// 战斗结算面板控制器
-    /// 挂载到 SettlePanel 上，BattleManager 战斗结束时调用 Show
+    /// 战斗结算面板
     /// </summary>
     public class SettlePanelController : MonoBehaviour
     {
-        [Header("UI 引用")]
+        [Header("UI")]
+        public TextMeshProUGUI titleText;        // "胜利!" / "失败"
         public TextMeshProUGUI scoreText;
         public TextMeshProUGUI accuracyText;
         public TextMeshProUGUI comboText;
         public TextMeshProUGUI starsText;
         public StarAnimator starAnimator;
 
-        /// <summary>显示结算数据</summary>
-        public void Show(StageResultData result)
+        [Header("按钮")]
+        public Button retryButton;               // 再来一次
+        public Button homeButton;                 // 返回主页
+
+        private void Start()
+        {
+            if (homeButton != null) homeButton.onClick.AddListener(() => Core.SceneLoader.Instance?.LoadScene("HomeScene"));
+            if (retryButton != null) retryButton.onClick.AddListener(() =>
+            {
+                BattleManager.Instance?.StartPVEBattle(BattleManager.Instance.CurrentStageData);
+                gameObject.SetActive(false);
+            });
+        }
+
+        public void Show(Data.StageResultData result)
         {
             gameObject.SetActive(true);
 
-            if (scoreText != null)
-                scoreText.text = $"得分: {result.score}";
+            bool isWin = result.isBossDefeated;
 
-            if (accuracyText != null)
-                accuracyText.text = $"正确率: {result.correctCount}/{result.totalCount} ({result.GetAccuracyText()})";
+            if (titleText != null)
+            {
+                titleText.text = isWin ? "🏆 胜利!" : "💀 失败";
+                titleText.color = isWin ? new Color(1f, 0.85f, 0.2f) : new Color(1f, 0.4f, 0.4f);
+            }
 
-            if (comboText != null)
-                comboText.text = $"最高连击: {result.maxCombo}";
+            if (scoreText != null) scoreText.text = $"得分: {result.score}";
+            if (accuracyText != null) accuracyText.text = $"正确: {result.correctCount}/{result.totalCount}";
+            if (comboText != null) comboText.text = $"最高连击: {result.maxCombo}";
+            if (starsText != null) starsText.text = result.GetStarText();
 
-            if (starsText != null)
-                starsText.text = result.GetStarText();
+            if (retryButton != null) retryButton.gameObject.SetActive(!isWin);
+            if (homeButton != null) homeButton.gameObject.SetActive(true);
 
-            Debug.Log($"[SettlePanel] 结算显示: 得分={result.score} 正确率={result.GetAccuracyText()} 连击={result.maxCombo} ★={result.starsEarned}");
-
-            // 播放星星弹出动画
             if (starAnimator != null)
                 starAnimator.Play(result.starsEarned);
         }

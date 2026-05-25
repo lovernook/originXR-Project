@@ -21,7 +21,7 @@ namespace OriginXR.Battle
         // === 公开属性（BattleSceneSetup 通过这里赋值） ===
         public TextMeshProUGUI questionText { get => _questionText; set => _questionText = value; }
         public TextMeshProUGUI questionIndexText { get => _questionIndexText; set => _questionIndexText = value; }
-        public Button[] optionButtons { get => _singleButtons; set { _singleButtons = value; RebindButtons(); } }
+        public Button[] optionButtons { get => _singleButtons; set { _singleButtons = value; } }
         public Image[] optionBackgrounds { get => _singleButtonBg; set => _singleButtonBg = value; }
         public TextMeshProUGUI[] optionTexts { get => _singleButtonTexts; set => _singleButtonTexts = value; }
         public GameObject resultPanel { get => _resultPanel; set => _resultPanel = value; }
@@ -99,8 +99,6 @@ namespace OriginXR.Battle
 
         private void Awake()
         {
-            RebindButtons();
-
             if (_trueButton != null) _trueButton.onClick.AddListener(() => OnSingleOptionClicked(0));
             if (_falseButton != null) _falseButton.onClick.AddListener(() => OnSingleOptionClicked(1));
 
@@ -113,6 +111,21 @@ namespace OriginXR.Battle
             // 初始隐藏所有题型容器
             HideAllContainers();
             if (_resultPanel != null) _resultPanel.SetActive(false);
+        }
+
+        /// <summary>BattleSceneSetup 注入按钮后调用，只绑定一次</summary>
+        public void BindButtons()
+        {
+            if (_singleButtons == null) return;
+
+            for (int i = 0; i < _singleButtons.Length; i++)
+            {
+                if (_singleButtons[i] == null) continue;
+                _singleButtons[i].onClick.RemoveAllListeners();
+                int index = i;
+                _singleButtons[i].onClick.AddListener(() => OnSingleOptionClicked(index));
+            }
+            Debug.Log($"[QuestionDisplay] 按钮绑定完成 ({_singleButtons.Length}个)");
         }
 
         // === 公共方法 ===

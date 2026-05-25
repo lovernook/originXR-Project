@@ -3,37 +3,22 @@ using UnityEngine;
 namespace OriginXR.Battle
 {
     /// <summary>
-    /// 开发阶段测试脚本
-    /// 挂到 BattleSystem 上，场景启动后自动开始一场战斗
-    /// 正式版本删除此脚本
+    /// 开发阶段测试脚本 — 从 PlayerPrefs 读取难度参数启动战斗
     /// </summary>
     public class TestBattleStarter : MonoBehaviour
     {
-        [Header("测试用关卡数据")]
-        [SerializeField] private string _testStageId = "test_stage_001";
-        [SerializeField] private string _testStageName = "第一章：编程入门";
-        [SerializeField] private string _testBossName = "初级BUG怪";
-        [SerializeField] private int _testBossHP = 1000;
-        [SerializeField] private int _testQuestionCount = 5;
-
         private void Start()
         {
-            Debug.Log("=== TestBattleStarter Start 执行 ===");
-            // 延迟0.5秒确保所有管理器初始化完成
             Invoke(nameof(StartTestBattle), 0.5f);
         }
 
         private void StartTestBattle()
         {
             var battleMgr = BattleManager.Instance;
-            if (battleMgr == null)
-            {
-                Debug.LogError("[TestBattleStarter] BattleManager 未找到！");
-                return;
-            }
+            if (battleMgr == null) { Debug.LogError("[Starter] BattleManager 未找到！"); return; }
 
             bool isDailyMode = PlayerPrefs.GetInt("IsDailyMode", 0) == 1;
-            PlayerPrefs.SetInt("IsDailyMode", 0);  // 用完重置
+            PlayerPrefs.SetInt("IsDailyMode", 0);
             PlayerPrefs.Save();
 
             OriginXR.Data.StageData stageData;
@@ -42,39 +27,35 @@ namespace OriginXR.Battle
             {
                 stageData = new OriginXR.Data.StageData
                 {
-                    id = "daily_challenge",
-                    name = "每日挑战",
-                    bossName = "今日BOSS",
-                    bossHP = 800,
-                    questionCount = 10,
-                    timePerQuestion = 10,
-                    rewardExp = 200,
-                    rewardGold = 100
+                    id = "daily", name = "每日挑战", bossName = "今日BOSS",
+                    bossHP = 10, questionCount = 10, timePerQuestion = 10,
+                    rewardExp = 200, rewardGold = 100
                 };
-                Debug.Log("[TestBattleStarter] 开始每日挑战模式");
             }
             else
             {
-                int stageId = PlayerPrefs.GetInt("CurrentStageId", 1);
-                string[] stageNames = {
-                    "变量入门", "数据类型", "条件判断", "循环结构",
-                    "数组基础", "函数入门", "面向对象", "继承多态",
-                    "接口抽象", "异常处理", "泛型集合", "文件操作"
-                };
-                string stageName = stageId <= stageNames.Length ? stageNames[stageId - 1] : $"第{stageId}关";
+                // 从 PlayerPrefs 读取难度参数
+                int qCount   = PlayerPrefs.GetInt("Diff_QuestionCount", 8);
+                int minDiff  = PlayerPrefs.GetInt("Diff_MinDifficulty", 1);
+                int maxDiff  = PlayerPrefs.GetInt("Diff_MaxDifficulty", 3);
+                int bossHP   = PlayerPrefs.GetInt("Diff_BossHP", qCount);
+                int playerHP = PlayerPrefs.GetInt("Diff_PlayerHP", 3);
+                int timeLmt  = PlayerPrefs.GetInt("Diff_TimeLimit", 10);
+                int expR     = PlayerPrefs.GetInt("Diff_ExpReward", 200);
+                int goldR    = PlayerPrefs.GetInt("Diff_GoldReward", 80);
+                string name  = PlayerPrefs.GetString("Diff_Name", "普通");
 
                 stageData = new OriginXR.Data.StageData
                 {
-                    id = $"stage_{stageId:D3}",
-                    name = $"第{stageId}关 · {stageName}",
-                    bossName = $"知识守卫 Lv.{stageId}",
-                    bossHP = 500 + stageId * 250,
-                    questionCount = 3 + stageId,
-                    timePerQuestion = 10,
-                    rewardExp = 50 + stageId * 25,
-                    rewardGold = 30 + stageId * 10
+                    id = $"diff_{name}",
+                    name = $"{name}难度",
+                    bossName = $"恶龙 Lv.{name}",
+                    bossHP = bossHP,
+                    questionCount = qCount,
+                    timePerQuestion = timeLmt,
+                    rewardExp = expR,
+                    rewardGold = goldR
                 };
-                Debug.Log($"[TestBattleStarter] 开始关卡: {stageData.name}");
             }
 
             battleMgr.StartPVEBattle(stageData);

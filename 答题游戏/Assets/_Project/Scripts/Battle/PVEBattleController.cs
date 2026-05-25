@@ -90,7 +90,7 @@ namespace OriginXR.Battle
             bool isCombo = _comboEffect != null && _comboEffect.IsComboActive();
 
             // BOSS 受伤
-            _bossController?.TakeDamage(damage, isCombo);
+            _bossController?.TakeDamage(1);
 
             // 对话气泡（随机鼓励语）
             string[] encouragements = { "漂亮！", "太棒了！", "答对了！", "继续保持！", "完美一击！" };

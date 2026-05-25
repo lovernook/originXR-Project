@@ -15,7 +15,7 @@ namespace OriginXR.Home
         [SerializeField] private string _battleSceneName = "BattleScene";
 
         [Header("UI 面板")]
-        [SerializeField] private StageSelectPanel _stageSelectPanel;
+        [SerializeField] private DifficultyPanel _difficultyPanel;
         [SerializeField] private DailyPanel _dailyPanel;
         [SerializeField] private ShopPanelUI _shopPanel;
         [SerializeField] private SimpleSettingsPanel _settingsPanel;
@@ -28,8 +28,8 @@ namespace OriginXR.Home
         public void OnPVEClicked()
         {
             Core.AudioManager.Instance?.PlayUISFX("button_click");
-            if (_stageSelectPanel != null)
-                _stageSelectPanel.Show();
+            if (_difficultyPanel != null)
+                _difficultyPanel.Show();
             else
                 SceneLoader.Instance?.LoadScene(_battleSceneName);
         }

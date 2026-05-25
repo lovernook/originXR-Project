@@ -46,6 +46,7 @@ namespace OriginXR.Data
         public List<string> knowledgePointIds; // 关联知识点ID列表
         public string subjectId;             // 所属学科ID
         public string explanation;           // 题目解析（答错后展示）
+        [NonSerialized] public string devCorrectAnswer;  // 开发阶段使用，生产环境删除
 
         // === 答题结果（服务端返回后填充） ===
         [NonSerialized] public string selectedAnswer;

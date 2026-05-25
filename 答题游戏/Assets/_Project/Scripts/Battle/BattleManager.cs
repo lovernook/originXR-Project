@@ -3,57 +3,32 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using OriginXR.Data;
-using OriginXR.Core;
 
 namespace OriginXR.Battle
 {
-    /// <summary>
-    /// 战斗状态枚举
-    /// </summary>
-    public enum BattleState
-    {
-        Intro,       // BOSS出场动画 + 准备
-        Playing,     // 答题循环中
-        Question,    // 展示题目 + 等待作答
-        AnswerShow,  // 展示答案结果（正确/错误动画）
-        Pause,       // 暂停（道具/退出确认）
-        Settle,      // 结算面板
-        GameOver     // 生命耗尽
-    }
-
+    public enum BattleState { Intro, Playing, Question, AnswerShow, Pause, Win, Lose }
     public enum BattleMode { PVE, PVP }
 
     /// <summary>
-    /// 战斗总控管理器（单例）
-    /// 负责：
-    /// 1. 统筹 BattleScene 完整答题战斗流程
-    /// 2. 管理战斗状态机，协调各子系统
-    /// 3. 与服务端通信：获取题目 -> 提交答案 -> 结算
-    /// 4. PVE 专属逻辑（关卡/BOSS/生命数）
-    ///
-    /// 状态机流程：
-    ///   Intro → Playing → Question → (ShowNextQuestion or) AnswerShow → Playing → ... → Settle/GameOver
+    /// 战斗总控 — 新规则：
+    /// 答对 → 计时重置 + 立即切下一题 + BOSS扣血
+    /// 答错 → BOSS攻击 + 玩家扣血 + 展示答案 → 下一题
+    /// 玩家HP归零 → 失败  |  全部答对 → BOSS死亡 → 胜利
     /// </summary>
     public class BattleManager : MonoBehaviour
     {
-        [Header("战斗子系统")]
+        [Header("子系统")]
         [SerializeField] private QuestionDisplay _questionDisplay;
         [SerializeField] private TimerController _timerController;
         [SerializeField] private AnswerHandler _answerHandler;
         [SerializeField] private ComboEffectController _comboEffectController;
         [SerializeField] private BossController _bossController;
         [SerializeField] private PVEBattleController _pveController;
-        [SerializeField] private PVPBattleController _pvpController;
-
-        [Header("结算面板")]
-        [SerializeField] private GameObject _settlePanelPrefab;
-        [SerializeField] private Transform _settlePanelRoot;
 
         // === 单例 ===
         public static BattleManager Instance { get; private set; }
 
         // === 属性 ===
-        public BattleMode CurrentMode { get; private set; }
         public BattleState CurrentState { get; private set; }
         public StageData CurrentStageData { get; private set; }
         public List<QuestionData> QuestionList { get; private set; }
@@ -61,23 +36,26 @@ namespace OriginXR.Battle
         public int CurrentScore { get; private set; }
         public int CurrentCombo { get; private set; }
         public int MaxCombo { get; private set; }
-        public int RemainingLives { get; private set; } = 3;
         public int CorrectCount { get; private set; }
         public int TotalQuestionCount => QuestionList?.Count ?? 0;
+        public int PlayerHP { get; private set; } = 3;
+        public int BossHP { get; private set; }
+        public int BossMaxHP { get; private set; }
         public float TotalAnswerTime { get; private set; }
-        public bool IsComboActive => CurrentCombo >= 3;
 
         // === 事件 ===
         public event Action<BattleState> OnBattleStateChanged;
         public event Action<QuestionData, int> OnQuestionChanged;
         public event Action<int> OnComboChanged;
         public event Action<StageResultData> OnBattleFinished;
+        public event Action<int, int> OnPlayerHPChanged;      // currentHP, maxHP
+        public event Action<int, int> OnBossHPChanged;        // currentHP, maxHP
 
-        // === 内部状态 ===
+        // === 内部 ===
         private float _questionStartTime;
-        private bool _isWaitingForServerResult;
-
-        // === Unity 生命周期 ===
+        private bool _isWaitingResult;
+        private int _playerMaxHP;
+        private Coroutine _delayedCoroutine;        // 当前延迟协程
 
         private void Awake()
         {
@@ -85,235 +63,202 @@ namespace OriginXR.Battle
             Instance = this;
         }
 
-        private void Start()
-        {
-            InitializeSubsystems();
-        }
-
+        private void Start() => InitializeSubsystems();
         private void OnDestroy()
         {
             if (_timerController != null) _timerController.OnTimeUp -= OnTimeUp;
-            if (_answerHandler != null) _answerHandler.OnResultReceived -= HandleAnswerResult;
-            if (_pveController != null) _pveController.OnPVEBattleEnd -= OnPVEBattleEnd;
+            if (_answerHandler != null) _answerHandler.OnResultReceived -= OnResult;
             if (Instance == this) Instance = null;
         }
 
-        // === 初始化 ===
-
         private void InitializeSubsystems()
         {
-            Debug.Log($"[BattleManager] 初始化子系统... display={_questionDisplay != null} timer={_timerController != null} answer={_answerHandler != null} pve={_pveController != null}");
-
-            if (_questionDisplay != null)
-                _questionDisplay.OnAnswerSubmitted += SubmitAnswer;
-
-            if (_timerController != null)
-                _timerController.OnTimeUp += OnTimeUp;
-
-            if (_answerHandler != null)
-                _answerHandler.OnResultReceived += HandleAnswerResult;
-
-            if (_pveController != null)
-                _pveController.OnPVEBattleEnd += OnPVEBattleEnd;
+            if (_questionDisplay != null) _questionDisplay.OnAnswerSubmitted += SubmitAnswer;
+            if (_timerController != null) _timerController.OnTimeUp += OnTimeUp;
+            if (_answerHandler != null) _answerHandler.OnResultReceived += OnResult;
         }
 
-        // === 公共方法 ===
+        // === 开始 ===
 
-        /// <summary>启动 PVE 对战（从关卡选择进入）</summary>
         public void StartPVEBattle(StageData stageData)
         {
-            CurrentMode = BattleMode.PVE;
+            // 清理上一次战斗的残留协程
+            if (_delayedCoroutine != null) { StopCoroutine(_delayedCoroutine); _delayedCoroutine = null; }
+            StopAllCoroutines();
+            _isWaitingResult = false;
+
             CurrentStageData = stageData;
-            RemainingLives = 3;
             CurrentScore = 0;
             CurrentCombo = 0;
             MaxCombo = 0;
             CorrectCount = 0;
             TotalAnswerTime = 0f;
+            _playerMaxHP = PlayerPrefs.GetInt("Diff_PlayerHP", 3);
+            PlayerHP = _playerMaxHP;
+            BossHP = stageData.bossHP;
+            BossMaxHP = BossHP;
 
-            if (_pveController != null)
-                _pveController.Initialize(stageData);
+            OnPlayerHPChanged?.Invoke(PlayerHP, _playerMaxHP);
+            OnBossHPChanged?.Invoke(BossHP, BossMaxHP);
 
             ChangeState(BattleState.Intro);
-            StartCoroutine(FetchQuestionsFromServer(stageData.id));
+            StartCoroutine(FetchQuestions(stageData));
         }
 
-        /// <summary>开始战斗（题目加载完成后调用）</summary>
-        public void BeginBattle()
+        private IEnumerator FetchQuestions(StageData stageData)
         {
-            if (QuestionList == null || QuestionList.Count == 0)
+            int qCount = stageData.questionCount;
+            int minDiff = PlayerPrefs.GetInt("Diff_MinDifficulty", 1);
+            int maxDiff = PlayerPrefs.GetInt("Diff_MaxDifficulty", 3);
+
+            var qm = QuestionManager.Instance;
+            if (qm != null && qm.GetTotalCount() > 0)
             {
-                Debug.LogError("[BattleManager] 题目列表为空，无法开始战斗");
-                return;
+                QuestionList = qm.GetQuestionsByDifficulty(qCount, minDiff, maxDiff);
+                if (QuestionList.Count < qCount)
+                {
+                    var extra = qm.GetRandomQuestions(qCount - QuestionList.Count);
+                    QuestionList.AddRange(extra);
+                }
+            }
+            else
+            {
+                QuestionList = CreateFallback(qCount);
             }
 
+            Debug.Log($"[Battle] 加载 {QuestionList.Count} 题, BossHP={BossHP}, PlayerHP={PlayerHP}");
+            yield return new WaitForSeconds(0.3f);
+            BeginBattle();
+        }
+
+        private void BeginBattle()
+        {
             ChangeState(BattleState.Playing);
             ShowNextQuestion();
         }
 
-        /// <summary>显示下一题</summary>
+        // === 出题 ===
+
         public void ShowNextQuestion()
         {
-            CurrentQuestionIndex++;
+            // 已失败则不继续
+            if (CurrentState == BattleState.Lose) return;
 
-            if (CurrentQuestionIndex >= TotalQuestionCount)
-            {
-                FinishBattle();
-                return;
-            }
+            CurrentQuestionIndex++;
+            if (CurrentQuestionIndex >= TotalQuestionCount) { WinBattle(); return; }
 
             ChangeState(BattleState.Question);
+            var q = QuestionList[CurrentQuestionIndex];
+            _questionDisplay?.DisplayQuestion(q, CurrentQuestionIndex + 1, TotalQuestionCount);
 
-            QuestionData question = QuestionList[CurrentQuestionIndex];
-            Debug.Log($"[BattleManager] 显示第{CurrentQuestionIndex + 1}题, timerController={(_timerController != null ? "已绑定" : "NULL!")}");
-
-            _questionDisplay?.DisplayQuestion(question, CurrentQuestionIndex + 1, TotalQuestionCount);
-
-            if (_timerController != null)
-            {
-                Debug.Log($"[BattleManager] 启动倒计时: {question.timeLimit}s");
-                _timerController.StartCountdown(question.timeLimit > 0 ? question.timeLimit : 10f);
-            }
-            else
-            {
-                Debug.LogError("[BattleManager] _timerController 为 NULL！请检查 Inspector 引用");
-            }
+            // 每次出新题重置计时
+            float t = CurrentStageData?.timePerQuestion ?? 10f;
+            _timerController?.StartCountdown(t);
 
             _questionStartTime = Time.time;
-            OnQuestionChanged?.Invoke(question, CurrentQuestionIndex);
+            OnQuestionChanged?.Invoke(q, CurrentQuestionIndex);
         }
 
-        /// <summary>提交答案（由 QuestionDisplay 回调）</summary>
+        // === 提交答案 ===
+
         public void SubmitAnswer(string selectedOption)
         {
-            if (_isWaitingForServerResult) return;
-            if (_timerController != null) _timerController.Pause();
+            if (_isWaitingResult) return;
+            _timerController?.Pause();
+            _isWaitingResult = true;
 
-            _isWaitingForServerResult = true;
-            float usedTime = Time.time - _questionStartTime;
-            TotalAnswerTime += usedTime;
+            float used = Time.time - _questionStartTime;
+            TotalAnswerTime += used;
 
-            QuestionData question = QuestionList[CurrentQuestionIndex];
-            _answerHandler?.SubmitAnswer(question.id, selectedOption, usedTime);
+            var q = QuestionList[CurrentQuestionIndex];
+            _answerHandler?.SubmitAnswer(q, selectedOption, used);
         }
 
-        /// <summary>处理答题结果（服务端返回）</summary>
-        private void HandleAnswerResult(bool isCorrect, string correctAnswer, string explanation, int scoreGained)
+        private void OnTimeUp()
         {
-            _isWaitingForServerResult = false;
-            QuestionData question = QuestionList[CurrentQuestionIndex];
-            question.isCorrect = isCorrect;
-            question.scoreGained = scoreGained;
+            if (!_isWaitingResult) SubmitAnswer("");  // 超时=空白=错
+        }
 
-            ChangeState(BattleState.AnswerShow);
+        // === 判定结果 ===
+
+        private void OnResult(bool isCorrect, string correctAnswer, string explanation, int score)
+        {
+            _isWaitingResult = false;
+            var q = QuestionList[CurrentQuestionIndex];
+            q.isCorrect = isCorrect;
+            q.scoreGained = score;
 
             if (isCorrect)
             {
                 CorrectCount++;
-                CurrentScore += scoreGained;
+                CurrentScore += score;
                 UpdateCombo(true);
 
-                if (_pveController != null)
-                    _pveController.HandleCorrectAnswer(question.id, scoreGained);
+                // BOSS 扣血
+                BossHP = Mathf.Max(0, BossHP - 1);
+                OnBossHPChanged?.Invoke(BossHP, BossMaxHP);
+
+                ChangeState(BattleState.AnswerShow);
+                _questionDisplay?.ShowResult(true, correctAnswer, explanation);
+
+                Debug.Log($"[Battle] ✓正确! Combo={CurrentCombo}  BossHP={BossHP}/{BossMaxHP}");
+
+                // 立刻切下一题
+                _delayedCoroutine = StartCoroutine(DelayedNext(0.5f));
             }
             else
             {
                 UpdateCombo(false);
+                PlayerHP--;
+                OnPlayerHPChanged?.Invoke(PlayerHP, _playerMaxHP);
 
-                if (_pveController != null)
-                    _pveController.HandleWrongAnswer(question.id);
+                ChangeState(BattleState.AnswerShow);
+                _questionDisplay?.ShowResult(false, correctAnswer, explanation);
+
+                // BOSS 攻击动画
+                _bossController?.PlayAttack();
+
+                Debug.Log($"[Battle] ✗错误! PlayerHP={PlayerHP}/{_playerMaxHP}");
+
+                if (PlayerHP <= 0)
+                {
+                    // 取消所有待执行的切题协程
+                    if (_delayedCoroutine != null) StopCoroutine(_delayedCoroutine);
+                    _delayedCoroutine = StartCoroutine(DelayedLose(1.5f));
+                    return;
+                }
+
+                // 暂停一下再切题
+                _delayedCoroutine = StartCoroutine(DelayedNext(1.5f));
             }
-
-            // 显示答题结果和解析
-            _questionDisplay?.ShowResult(isCorrect, correctAnswer, explanation);
-
-            // 1.5秒后自动显示下一题
-            StartCoroutine(DelayedNextQuestion(1.5f));
         }
 
-        private IEnumerator DelayedNextQuestion(float delay)
+        private IEnumerator DelayedNext(float d)
         {
-            yield return new WaitForSeconds(delay);
-            ChangeState(BattleState.Playing);
-            ShowNextQuestion();
-        }
-
-        /// <summary>时间耗尽（自动提交空答案）</summary>
-        private void OnTimeUp()
-        {
-            if (_isWaitingForServerResult) return;
-            SubmitAnswer("");
-        }
-
-        /// <summary>更新连击</summary>
-        private void UpdateCombo(bool isCorrect)
-        {
-            if (isCorrect)
+            yield return new WaitForSeconds(d);
+            if (CurrentState != BattleState.Lose)
             {
-                CurrentCombo++;
-                if (CurrentCombo > MaxCombo) MaxCombo = CurrentCombo;
-                _comboEffectController?.IncrementCombo();
-            }
-            else
-            {
-                CurrentCombo = 0;
-                _comboEffectController?.ResetCombo();
-            }
-            OnComboChanged?.Invoke(CurrentCombo);
-        }
-
-        /// <summary>PVE 战斗结束</summary>
-        private void OnPVEBattleEnd(BattleEndReason reason)
-        {
-            if (reason == BattleEndReason.LivesExhausted)
-            {
-                ChangeState(BattleState.GameOver);
-                ShowGameOverPanel();
-            }
-            else if (reason == BattleEndReason.BossDefeated || reason == BattleEndReason.QuestionsDone)
-            {
-                FinishBattle();
+                ChangeState(BattleState.Playing);
+                ShowNextQuestion();
             }
         }
 
-        /// <summary>完成战斗，进入结算</summary>
-        public void FinishBattle()
+        private IEnumerator DelayedLose(float d)
         {
-            ChangeState(BattleState.Settle);
-
-            StartCoroutine(SubmitBattleResultToServer());
+            yield return new WaitForSeconds(d);
+            LoseBattle();
         }
 
-        /// <summary>切换战斗状态</summary>
-        public void ChangeState(BattleState newState)
+        // === 胜负 ===
+
+        private void WinBattle()
         {
-            CurrentState = newState;
-            OnBattleStateChanged?.Invoke(newState);
-        }
+            ChangeState(BattleState.Win);
+            BossHP = 0;
+            OnBossHPChanged?.Invoke(0, BossMaxHP);
 
-        // === 服务端通信 ===
-
-        private IEnumerator FetchQuestionsFromServer(string stageId)
-        {
-            Debug.Log($"[BattleManager] 正在获取关卡题目: {stageId}");
-            // 模拟：实际应通过 HttpManager 请求服务端
-            // 此处使用模拟数据使演示可用
-            QuestionList = CreateMockQuestions(stageId);
-            yield return new WaitForSeconds(0.5f);
-
-            if (_bossController != null && CurrentStageData != null)
-            {
-                _bossController.Initialize(CurrentStageData.bossModelId, CurrentStageData.bossName, CurrentStageData.bossHP);
-            }
-
-            BeginBattle();
-        }
-
-        private IEnumerator SubmitBattleResultToServer()
-        {
             var result = new StageResultData
             {
-                stageId = CurrentStageData?.id ?? "",
                 stageName = CurrentStageData?.name ?? "",
                 score = CurrentScore,
                 correctCount = CorrectCount,
@@ -323,95 +268,73 @@ namespace OriginXR.Battle
                 starsEarned = CalculateStars(),
                 expGained = CurrentStageData?.rewardExp ?? 100,
                 goldGained = CurrentStageData?.rewardGold ?? 50,
-                isBossDefeated = _bossController?.IsDefeated() ?? false,
-                weakKnowledgePoints = new List<string>(),
-                completedAt = DateTime.UtcNow
+                isBossDefeated = true
             };
 
-            // 发送结算数据到服务端（通过 HttpManager）
-            // HttpManager.Instance.Post("game/stages/" + result.stageId + "/finish", result, ...);
-
-            Debug.Log($"[BattleManager] 战斗结算: 得分{result.score} 正确{result.correctCount}/{result.totalCount} 连击{result.maxCombo} ★{result.starsEarned}");
-            yield return new WaitForSeconds(0.3f);
-
-            // 显示结算面板
-            ShowSettlementPanel(result);
+            Debug.Log($"[Battle] 🏆 胜利! 得分={result.score}");
             OnBattleFinished?.Invoke(result);
         }
 
-        // === UI 面板 ===
-
-        private void ShowSettlementPanel(StageResultData result)
+        private void LoseBattle()
         {
-            if (_settlePanelPrefab == null || _settlePanelRoot == null) return;
-            GameObject panel = Instantiate(_settlePanelPrefab, _settlePanelRoot);
-            // TODO: 绑定结算数据到 UI 控件
-        }
+            ChangeState(BattleState.Lose);
 
-        private void ShowGameOverPanel()
-        {
-            Debug.Log("[BattleManager] 生命耗尽，游戏结束");
-            UI.PopupManager.Instance?.ShowConfirm("挑战失败", "生命已耗尽！是否重新挑战？",
-                () => { StartPVEBattle(CurrentStageData); },
-                () => { Core.SceneLoader.Instance?.LoadScene("LobbyScene"); },
-                "重新挑战", "返回主城");
-        }
-
-        /// <summary>计算获得星数（0~3）</summary>
-        private int CalculateStars()
-        {
-            if (CurrentStageData?.starConditions == null) return 3;
+            // 失败也生成结算数据
             var result = new StageResultData
             {
+                stageName = CurrentStageData?.name ?? "",
+                score = CurrentScore,
                 correctCount = CorrectCount,
                 totalCount = TotalQuestionCount,
                 maxCombo = MaxCombo,
-                totalTime = TotalAnswerTime
+                totalTime = TotalAnswerTime,
+                starsEarned = CalculateStars(),
+                expGained = Mathf.RoundToInt((CurrentStageData?.rewardExp ?? 50) * 0.3f),
+                goldGained = Mathf.RoundToInt((CurrentStageData?.rewardGold ?? 30) * 0.3f),
+                isBossDefeated = false
             };
 
-            int stars = 0;
-            foreach (var cond in CurrentStageData.starConditions)
-            {
-                if (cond.IsMet(result)) stars++;
-            }
-            return Mathf.Min(stars, 3);
+            Debug.Log($"[Battle] 💀 失败! 结算: ★{result.starsEarned}");
+            OnBattleFinished?.Invoke(result);
         }
 
-        // === 模拟题目数据（开发阶段使用） ===
-
-        private List<QuestionData> CreateMockQuestions(string stageId)
+        private void UpdateCombo(bool correct)
         {
-            return new List<QuestionData>
+            if (correct) { CurrentCombo++; if (CurrentCombo > MaxCombo) MaxCombo = CurrentCombo; _comboEffectController?.IncrementCombo(); }
+            else { CurrentCombo = 0; _comboEffectController?.ResetCombo(); }
+            OnComboChanged?.Invoke(CurrentCombo);
+        }
+
+        private int CalculateStars()
+        {
+            int wrong = TotalQuestionCount - CorrectCount;
+            if (wrong == 0) return 3;
+            if (wrong == 1) return 2;
+            if (wrong == 2) return 1;
+            return 0;
+        }
+
+        private void ChangeState(BattleState s) { CurrentState = s; OnBattleStateChanged?.Invoke(s); }
+
+        private List<QuestionData> CreateFallback(int count)
+        {
+            var list = new List<QuestionData>();
+            for (int i = 0; i < count; i++)
             {
-                new QuestionData {
-                    id = Guid.NewGuid().ToString(), type = QuestionType.SingleChoice, content = "Unity中，以下哪个组件用于控制3D角色的移动？",
-                    difficulty = 1, timeLimit = 10, explanation = "CharacterController 是Unity中用于控制角色移动的专用组件。",
-                    options = new List<OptionData> {
-                        new OptionData { key = "A", content = "CharacterController" },
-                        new OptionData { key = "B", content = "BoxCollider" },
-                        new OptionData { key = "C", content = "Rigidbody" },
-                        new OptionData { key = "D", content = "MeshRenderer" }
-                    }
-                },
-                new QuestionData {
-                    id = Guid.NewGuid().ToString(), type = QuestionType.SingleChoice, content = "C# 中，以下哪个关键字用于定义接口？",
-                    difficulty = 2, timeLimit = 10, explanation = "interface 关键字用于定义接口。",
-                    options = new List<OptionData> {
-                        new OptionData { key = "A", content = "class" },
-                        new OptionData { key = "B", content = "interface" },
-                        new OptionData { key = "C", content = "struct" },
-                        new OptionData { key = "D", content = "abstract" }
-                    }
-                },
-                new QuestionData {
-                    id = Guid.NewGuid().ToString(), type = QuestionType.TrueFalse, content = "Unity 的 Time.deltaTime 表示上一帧到当前帧的时间间隔。",
-                    difficulty = 1, timeLimit = 8, explanation = "Time.deltaTime 确实表示每帧的时间间隔，常用于平滑运动计算。",
-                    options = new List<OptionData> {
-                        new OptionData { key = "T", content = "正确" },
-                        new OptionData { key = "F", content = "错误" }
-                    }
-                }
-            };
+                string correct = ((char)('A' + (i % 4))).ToString();
+                list.Add(new QuestionData {
+                    id=$"mock_{i}", type=QuestionType.SingleChoice,
+                    content=$"模拟题目 {i+1}", timeLimit=10,
+                    devCorrectAnswer=correct, difficulty=1,
+                    options = new List<OptionData>{
+                        new OptionData{key="A",content="选项A"},
+                        new OptionData{key="B",content="选项B"},
+                        new OptionData{key="C",content="选项C"},
+                        new OptionData{key="D",content="选项D"}
+                    },
+                    explanation="这是题目解析。" });
+            }
+            return list;
         }
     }
 }
