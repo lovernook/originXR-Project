@@ -26,8 +26,8 @@ namespace OriginXR.Battle
             if (homeButton != null) homeButton.onClick.AddListener(() => Core.SceneLoader.Instance?.LoadScene("HomeScene"));
             if (retryButton != null) retryButton.onClick.AddListener(() =>
             {
-                BattleManager.Instance?.StartPVEBattle(BattleManager.Instance.CurrentStageData);
                 gameObject.SetActive(false);
+                BattleManager.Instance?.Restart();
             });
         }
 
