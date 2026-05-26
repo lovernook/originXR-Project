@@ -1,3 +1,21 @@
-version https://git-lfs.github.com/spec/v1
-oid sha256:36c5302cffe85aebe893608e8e344ddb6ca93313449b6c15b36bc3cdab0ca7ed
-size 483
+fileFormatVersion: 2
+guid: e28e9ad7f0a79f14d8c01971d5416eba
+TrueTypeFontImporter:
+  externalObjects: {}
+  serializedVersion: 4
+  fontSize: 16
+  forceTextureCase: -2
+  characterSpacing: 0
+  characterPadding: 1
+  includeFontData: 1
+  fontNames:
+  - Ariston Comic Demo
+  fallbackFontReferences: []
+  customCharacters: 
+  fontRenderingMode: 0
+  ascentCalculationMode: 1
+  useLegacyBoundsCalculation: 0
+  shouldRoundAdvanceValue: 1
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 

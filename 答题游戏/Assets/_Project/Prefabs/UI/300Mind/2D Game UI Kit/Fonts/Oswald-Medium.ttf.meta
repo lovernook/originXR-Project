@@ -1,3 +1,21 @@
-version https://git-lfs.github.com/spec/v1
-oid sha256:59d126717dcc6b9d51e509b7a7f798fda2bb629f2b36209ac7e2cea55d54385b
-size 471
+fileFormatVersion: 2
+guid: ca88d0c4c11f8aa4a8ef35ba486b2aa8
+TrueTypeFontImporter:
+  externalObjects: {}
+  serializedVersion: 4
+  fontSize: 16
+  forceTextureCase: -2
+  characterSpacing: 0
+  characterPadding: 1
+  includeFontData: 1
+  fontNames:
+  - Oswald
+  fallbackFontReferences: []
+  customCharacters: 
+  fontRenderingMode: 0
+  ascentCalculationMode: 1
+  useLegacyBoundsCalculation: 0
+  shouldRoundAdvanceValue: 1
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
