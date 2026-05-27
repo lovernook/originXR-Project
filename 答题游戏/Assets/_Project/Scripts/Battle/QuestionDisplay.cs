@@ -27,7 +27,8 @@ namespace OriginXR.Battle
             _q = question; _answer = ""; _submitted = false;
             if (questionText != null) questionText.text = $"Q{index}/{total}  {question.content}";
             for (int i = 0; i < optionTexts?.Length && i < question.options.Count; i++)
-                if (optionTexts[i] != null) optionTexts[i].text = $"{question.options[i].key}. {question.options[i].content}";
+                if (optionTexts[i] != null)
+                    optionTexts[i].text = $"{question.options[i].GetKey()}. {question.options[i].content}";
             if (resultText != null) resultText.gameObject.SetActive(false);
             if (explanationText != null) explanationText.gameObject.SetActive(false);
             ResetBg(); SetBtns(true);
@@ -39,13 +40,14 @@ namespace OriginXR.Battle
             if (explanationText != null && !string.IsNullOrEmpty(explanation)) { explanationText.gameObject.SetActive(true); explanationText.text = explanation; }
             if (optionBg != null && _q != null)
                 for (int i = 0; i < _q.options.Count && i < optionBg.Length; i++)
-                    if (optionBg[i] != null && _q.options[i].key == correctAns) optionBg[i].color = new Color(0.2f, 0.8f, 0.3f, 0.7f);
+                    if (optionBg[i] != null && _q.options[i].GetKey() == correctAns)
+                        optionBg[i].color = new Color(0.2f, 0.8f, 0.3f, 0.7f);
         }
 
         public void OnBtnClick(int index)
         {
             if (_submitted || _q == null || index >= _q.options.Count) return;
-            _answer = _q.options[index].key; _submitted = true;
+            _answer = _q.options[index].GetKey(); _submitted = true;
             if (optionBg != null) for (int i = 0; i < optionBg.Length; i++) if (optionBg[i] != null) optionBg[i].color = (i == index) ? new Color(0.27f, 0.53f, 1f, 0.7f) : Color.white;
             SetBtns(false);
             OnAnswerSubmitted?.Invoke(_answer);

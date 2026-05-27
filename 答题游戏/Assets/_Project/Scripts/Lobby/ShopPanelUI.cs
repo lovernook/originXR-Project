@@ -1,65 +1,48 @@
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
+using OriginXR.Data;
 
 namespace OriginXR.Home
 {
-    /// <summary>
-    /// 商店面板控制器
-    /// </summary>
     public class ShopPanelUI : MonoBehaviour
     {
-        [Header("UI")]
         public TextMeshProUGUI goldText;
+        public TextMeshProUGUI diamondText;
         public Button closeButton;
-
-        [Header("道具按钮")]
-        public Button[] itemButtons;
-        public string[] itemNames = { "跳过卡", "加倍卡", "冻结卡", "体力药水" };
-        public int[] itemPrices = { 100, 5, 10, 200 };
-        public string[] itemCurrencies = { "gold", "diamond", "diamond", "gold" };
 
         private void Start()
         {
             if (closeButton != null) closeButton.onClick.AddListener(Hide);
+        }
 
-            for (int i = 0; i < itemButtons.Length; i++)
+        private void OnEnable() => UpdateDisplay();
+        public void Show() { gameObject.SetActive(true); UpdateDisplay(); }
+        public void Hide() { gameObject.SetActive(false); }
+
+        private void UpdateDisplay()
+        {
+            if (goldText != null) goldText.text = $" {CurrencyManager.Gold}";
+            if (diamondText != null) diamondText.text = $" {CurrencyManager.Diamond}";
+        }
+
+        public void BuySkipCard()     => DoBuy("跳过卡", 100, false);
+        public void BuyDoubleCard()   => DoBuy("加倍卡", 5, true);
+        public void BuyFreezeCard()   => DoBuy("冻结卡", 10, true);
+        public void BuyEnergyPotion() => DoBuy("体力药水", 200, false);
+
+        private void DoBuy(string itemName, int price, bool useDiamond)
+        {
+            bool ok = useDiamond ? CurrencyManager.SpendDiamond(price) : CurrencyManager.SpendGold(price);
+            if (ok)
             {
-                int index = i;
-                itemButtons[i].onClick.AddListener(() => BuyItem(index));
+                UpdateDisplay();
+                UI.ToastManager.Instance?.ShowSuccess($"购买了 {itemName}！");
             }
-        }
-
-        public void Show()
-        {
-            gameObject.SetActive(true);
-            UpdateGoldDisplay();
-        }
-
-        public void Hide()
-        {
-            gameObject.SetActive(false);
-        }
-
-        private void BuyItem(int index)
-        {
-            string name = itemNames[index];
-            int price = itemPrices[index];
-            string currency = itemCurrencies[index];
-
-            UI.PopupManager.Instance?.ShowConfirm("购买确认",
-                $"花费 {price} {(currency == "gold" ? "金币" : "钻石")} 购买 {name}？",
-                () =>
-                {
-                    UI.ToastManager.Instance?.ShowSuccess($"购买了 {name}！");
-                    Debug.Log($"[Shop] 购买: {name} x1, 花费 {currency}{price}");
-                });
-        }
-
-        private void UpdateGoldDisplay()
-        {
-            if (goldText != null)
-                goldText.text = " 1280    ";
+            else
+            {
+                UI.ToastManager.Instance?.ShowWarning($"{(useDiamond ? "钻石" : "金币")}不足！");
+            }
         }
     }
 }

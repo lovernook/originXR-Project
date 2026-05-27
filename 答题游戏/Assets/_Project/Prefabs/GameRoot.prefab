@@ -11,13 +11,14 @@ GameObject:
   - component: {fileID: 2158298518583171882}
   - component: {fileID: 6222525934945435057}
   - component: {fileID: 8351062601663542576}
-  - component: {fileID: 4448642611855187089}
   - component: {fileID: 6954323393957186706}
   - component: {fileID: 2729665572888434585}
   - component: {fileID: 8673502381975613391}
   - component: {fileID: 6070501681799660799}
   - component: {fileID: 4870171543442208733}
   - component: {fileID: 5869514513193010771}
+  - component: {fileID: 1677364244080436037}
+  - component: {fileID: 143680176517328997}
   m_Layer: 0
   m_Name: GameRoot
   m_TagString: Untagged
@@ -54,7 +55,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   _audioManager: {fileID: 2729665572888434585}
   _networkManager: {fileID: 8351062601663542576}
-  _httpManager: {fileID: 4448642611855187089}
+  _httpManager: {fileID: 0}
   _sceneLoader: {fileID: 6954323393957186706}
 --- !u!114 &8351062601663542576
 MonoBehaviour:
@@ -74,21 +75,6 @@ MonoBehaviour:
   _baseReconnectDelay: 2
   _maxReconnectDelay: 30
   _receiveBufferSize: 4096
---- !u!114 &4448642611855187089
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 184818912851305580}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 314b4ffd48547f1409ab049a9e99970c, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  _requestTimeout: 30
-  _maxRetries: 2
-  _retryDelay: 1
 --- !u!114 &6954323393957186706
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -205,3 +191,28 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _defaultBank: {fileID: 11400000, guid: d0427d001db6bf242b3020bcbae52bd2, type: 2}
+--- !u!114 &1677364244080436037
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 184818912851305580}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3e588f7995bc4ec4686db49b9584e62a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  baseUrl: http://10.19.89.160:3002/api/v1
+--- !u!114 &143680176517328997
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 184818912851305580}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7ead19fb188153545a85248b6ec09632, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 

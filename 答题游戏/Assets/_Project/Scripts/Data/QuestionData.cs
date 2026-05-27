@@ -121,19 +121,17 @@ namespace OriginXR.Data
     [Serializable]
     public class OptionData
     {
-        public string key;       // 选项标识 A/B/C/D/E/F
-        public string content;   // 选项文本（支持简单HTML）
-        public string mediaUrl;  // 选项配图URL（可选）
+        public string key;        // 前端用
+        public string optionKey;  // 后端API用
+        public string content;
+        public string mediaUrl;
 
-        /// <summary>克隆选项</summary>
+        /// <summary>获取有效的选项标识（兼容前后端字段名差异）</summary>
+        public string GetKey() => !string.IsNullOrEmpty(key) ? key : optionKey;
+
         public OptionData Clone()
         {
-            return new OptionData
-            {
-                key = this.key,
-                content = this.content,
-                mediaUrl = this.mediaUrl
-            };
+            return new OptionData { key = this.key, optionKey = this.optionKey, content = this.content, mediaUrl = this.mediaUrl };
         }
     }
 }

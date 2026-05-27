@@ -342,8 +342,9 @@ GameObject:
   - component: {fileID: 395040305}
   - component: {fileID: 395040308}
   - component: {fileID: 395040307}
-  - component: {fileID: 395040306}
   - component: {fileID: 395040309}
+  - component: {fileID: 395040306}
+  - component: {fileID: 395040310}
   m_Layer: 5
   m_Name: BossImage
   m_TagString: Untagged
@@ -441,12 +442,24 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9f0b6142005e26c41b826243934d441d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  bossImage: {fileID: 0}
-  bossAnimator: {fileID: 0}
+  animator: {fileID: 0}
   hpSlider: {fileID: 0}
-  hpFillImage: {fileID: 0}
-  _attackTrigger: Attack
-  _hurtTrigger: Hurt
+  attackTrigger: Attack
+--- !u!114 &395040310
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 395040304}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9f0b6142005e26c41b826243934d441d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  animator: {fileID: 395040306}
+  hpSlider: {fileID: 1444316083}
+  attackTrigger: Attack
 --- !u!1 &400304357
 GameObject:
   m_ObjectHideFlags: 0
@@ -711,6 +724,12 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 497874650}
+  - component: {fileID: 497874657}
+  - component: {fileID: 497874655}
+  - component: {fileID: 497874654}
+  - component: {fileID: 497874653}
+  - component: {fileID: 497874652}
+  - component: {fileID: 497874651}
   m_Layer: 0
   m_Name: BattleSystem
   m_TagString: Untagged
@@ -733,6 +752,120 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &497874651
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 497874649}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0eacc505eeb4c0b4facc3d540a353c6d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  questionText: {fileID: 1007852271}
+  optionButtons:
+  - {fileID: 1844497075}
+  - {fileID: 812662026}
+  - {fileID: 475052563}
+  - {fileID: 1946419180}
+  optionBg:
+  - {fileID: 1844497076}
+  - {fileID: 812662027}
+  - {fileID: 475052564}
+  - {fileID: 1946419181}
+  optionTexts:
+  - {fileID: 1961453073}
+  - {fileID: 1541895475}
+  - {fileID: 236542107}
+  - {fileID: 1192234008}
+  resultText: {fileID: 2135483478}
+  explanationText: {fileID: 1490836194}
+  timerText: {fileID: 1846711347}
+  scoreText: {fileID: 1575786489}
+  bossController: {fileID: 395040309}
+  bossHpSlider: {fileID: 1444316083}
+  hearts:
+  - {fileID: 161674460}
+  - {fileID: 1337535098}
+  - {fileID: 642059426}
+  heartFull: {fileID: 21300040, guid: 1eaee135ce037439d925cee5e41ce026, type: 3}
+  heartEmpty: {fileID: -1630349027, guid: 0e91c24adfadbfc4dbca69da71af0240, type: 3}
+  settlePanel: {fileID: 1717410119}
+--- !u!114 &497874652
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 497874649}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 084906e5d9304814ea4500120b6506c8, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  comboText: {fileID: 0}
+--- !u!114 &497874653
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 497874649}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 77b14d4d0845e7b4daf5fc4a1817fcfa, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+--- !u!114 &497874654
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 497874649}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7f00852635ca77b49965947c9b551414, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  timerText: {fileID: 0}
+--- !u!114 &497874655
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 497874649}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0fa40615cefba6f43a236f6909c5b036, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  questionText: {fileID: 0}
+  optionButtons: []
+  optionBg: []
+  optionTexts: []
+  resultText: {fileID: 0}
+  explanationText: {fileID: 0}
+--- !u!114 &497874657
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 497874649}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 51a7a11aeda8f6e4c934dd9423f7ca26, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  questionDisplay: {fileID: 497874655}
+  timerController: {fileID: 497874654}
+  answerHandler: {fileID: 497874653}
+  comboEffect: {fileID: 497874652}
+  bossController: {fileID: 395040309}
 --- !u!1 &642059424
 GameObject:
   m_ObjectHideFlags: 0
@@ -992,6 +1125,10 @@ PrefabInstance:
     - target: {fileID: 2158298518583171882, guid: fee273ae229f94f41b345c7891fa4f01, type: 3}
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6222525934945435057, guid: fee273ae229f94f41b345c7891fa4f01, type: 3}
+      propertyPath: _httpManager
+      value: 
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -1796,9 +1933,9 @@ RectTransform:
   - {fileID: 642059425}
   - {fileID: 1337535097}
   - {fileID: 161674459}
-  - {fileID: 1717410116}
   - {fileID: 2135483476}
   - {fileID: 1490836192}
+  - {fileID: 1717410116}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}

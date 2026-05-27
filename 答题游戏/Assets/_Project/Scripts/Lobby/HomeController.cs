@@ -1,28 +1,39 @@
 using UnityEngine;
-using UnityEngine.UI;
+using TMPro;
 using OriginXR.Core;
+using OriginXR.Data;
 
 namespace OriginXR.Home
 {
-    /// <summary>
-    /// HomeScene 主页控制器
-    /// 管理主页按钮点击事件：PVE/每日挑战/商店/设置
-    /// </summary>
     public class HomeController : MonoBehaviour
     {
-        [Header("场景名称")]
-        [SerializeField] private string _homeSceneName = "HomeScene";
+        [Header("场景")]
         [SerializeField] private string _battleSceneName = "BattleScene";
 
-        [Header("UI 面板")]
+        [Header("面板")]
         [SerializeField] private DifficultyPanel _difficultyPanel;
         [SerializeField] private DailyPanel _dailyPanel;
         [SerializeField] private ShopPanelUI _shopPanel;
         [SerializeField] private SimpleSettingsPanel _settingsPanel;
 
+        [Header("顶部货币")]
+        public TextMeshProUGUI goldText;
+        public TextMeshProUGUI diamondText;
+
         private void Start()
         {
-            Debug.Log("[HomeController] 主页已加载");
+            UpdateCurrencyUI();
+        }
+
+        private void OnEnable()
+        {
+            UpdateCurrencyUI();
+        }
+
+        public void UpdateCurrencyUI()
+        {
+            if (goldText != null) goldText.text = $" {CurrencyManager.Gold}";
+            if (diamondText != null) diamondText.text = $" {CurrencyManager.Diamond}";
         }
 
         public void OnPVEClicked()
@@ -65,7 +76,7 @@ namespace OriginXR.Home
         /// <summary>返回主页</summary>
         public void BackToHome()
         {
-            SceneLoader.Instance?.LoadScene(_homeSceneName);
+            SceneLoader.Instance?.LoadScene("HomeScene");
         }
     }
 }

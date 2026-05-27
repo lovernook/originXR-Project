@@ -19,7 +19,7 @@ namespace OriginXR.EditorTools
     {
         // === 窗口状态 ===
         private Vector2 _scrollPosition;
-        private string _apiBaseUrl = "http://localhost:3000/api/v1";
+        private string _apiBaseUrl = "http://10.19.89.160:3002/api/v1";
         private string _authToken = "";
         private int _page = 1;
         private int _pageSize = 20;

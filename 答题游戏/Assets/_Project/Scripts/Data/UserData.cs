@@ -133,31 +133,4 @@ namespace OriginXR.Data
             return "初学者";
         }
     }
-
-    /// <summary>
-    /// API 通用响应包装
-    /// </summary>
-    [Serializable]
-    public class ApiResponse<T>
-    {
-        public int code;             // 0=成功
-        public string message;
-        public T data;
-        public long timestamp;
-
-        public bool IsSuccess => code == 0;
-    }
-
-    /// <summary>
-    /// API 分页数据包装
-    /// </summary>
-    [Serializable]
-    public class PaginatedData<T>
-    {
-        public List<T> items;
-        public int total;
-        public int page;
-        public int pageSize;
-        public int totalPages;
-    }
 }
