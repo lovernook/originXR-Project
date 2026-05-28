@@ -1,3 +1,16 @@
-version https://git-lfs.github.com/spec/v1
-oid sha256:fc1fb7c8a2f8241473bfd1ee78d8151f7cf8bf8e43900506e84c6862d78f8278
-size 470
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 24f50cdde74f1564dbf03905ba283c41, type: 3}
+  m_Name: DefaultQuestionBank
+  m_EditorClassIdentifier: 
+  bankDescription: "\u9ED8\u8BA4\u9898\u5E93"
+  questions: []
